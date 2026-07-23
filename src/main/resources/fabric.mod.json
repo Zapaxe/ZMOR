@@ -1,0 +1,41 @@
+{
+	"schemaVersion": 1,
+	"id": "zmor",
+	"version": "${version}",
+	"name": "Zap's Model Only Resources",
+	"description": "Allows applying custom resource pack armor textures selectively to the local player only, keeping default textures for other players/mobs.",
+	"authors": [
+		"zapaxe"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/zmor/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.example.ExampleMod"
+		],
+		"client": [
+			"com.example.client.ExampleModClient"
+		],
+		"modmenu": [
+			"com.example.client.ModMenuIntegration"
+		]
+	},
+	"mixins": [
+		"zmor.mixins.json",
+		{
+			"config": "zmor.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.14.0",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

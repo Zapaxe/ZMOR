@@ -1,0 +1,23 @@
+{
+	"required": true,
+	"package": "com.example.client.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"AvatarRenderStateMixin",
+		"AvatarRendererMixin",
+		"EquipmentRendererMixin",
+		"MultiPackResourceManagerMixin",
+		"MultiPackResourceManagerAccessor",
+		"SpriteSourceListMixin",
+		"SpriteSourceListAccessor",
+		"ItemModelResolverMixin",
+		"ItemStackRenderStateAccessor",
+		"LayerRenderStateAccessor"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}
