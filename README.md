@@ -1,9 +1,7 @@
-# Example Mod
+# Zap's Model Only Resources (ZMOR)
 
-## Setup
-
-For setup instructions, please see the [Fabric Documentation page](https://docs.fabricmc.net/develop/getting-started/creating-a-project#setting-up) related to the IDE that you are using.
+A Fabric mod for Minecraft that allows selectively applying custom resource pack textures and models to the local player while preserving default textures for other players, mobs, armor stands, and item frames.
 
 ## License
 
-This template is available under the CC0 license. Feel free to learn from it and incorporate it in your own projects.
+This project is licensed under the GNU Lesser General Public License v3.0 (LGPLv3). See the [LICENSE](LICENSE) file for full details.
