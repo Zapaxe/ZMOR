@@ -12,13 +12,17 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ModConfig {
     public static boolean applyToOtherPlayers = false;
     public static boolean applyToMobsAndArmorStands = false;
     public static boolean applyToItemFrames = false;
     public static List<String> filteredItems = new ArrayList<>();
+    public static Map<String, String> itemPackOverrides = new HashMap<>();
+    public static String mainOverridePackId = "top";
     public static String baseResourcePackId = "vanilla";
 
     private static final File CONFIG_FILE = new File(
@@ -36,6 +40,8 @@ public class ModConfig {
                     applyToMobsAndArmorStands = data.applyToMobsAndArmorStands;
                     applyToItemFrames = data.applyToItemFrames;
                     filteredItems = data.filteredItems != null ? data.filteredItems : new ArrayList<>();
+                    itemPackOverrides = data.itemPackOverrides != null ? data.itemPackOverrides : new HashMap<>();
+                    mainOverridePackId = data.mainOverridePackId != null ? data.mainOverridePackId : "top";
                     baseResourcePackId = data.baseResourcePackId != null ? data.baseResourcePackId : "vanilla";
                 }
             } catch (IOException e) {
@@ -52,6 +58,8 @@ public class ModConfig {
         data.applyToMobsAndArmorStands = applyToMobsAndArmorStands;
         data.applyToItemFrames = applyToItemFrames;
         data.filteredItems = filteredItems;
+        data.itemPackOverrides = itemPackOverrides;
+        data.mainOverridePackId = mainOverridePackId;
         data.baseResourcePackId = baseResourcePackId;
         try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
             GSON.toJson(data, writer);
@@ -60,15 +68,31 @@ public class ModConfig {
         }
     }
 
-    public static boolean shouldApplyTo(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
+    public static boolean isItemWhitelisted(ItemStack stack) {
+        if (stack == null || stack.isEmpty() || filteredItems == null || filteredItems.isEmpty()) {
             return false;
-        }
-        if (filteredItems.isEmpty()) {
-            return true;
         }
         Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
         return id != null && filteredItems.contains(id.toString());
+    }
+
+    public static boolean shouldApplyTo(ItemStack stack) {
+        return isItemWhitelisted(stack);
+    }
+
+    public static String getItemPack(String itemStrId) {
+        if (itemStrId == null || itemPackOverrides == null) return "default";
+        return itemPackOverrides.getOrDefault(itemStrId, "default");
+    }
+
+    public static void setItemPack(String itemStrId, String packId) {
+        if (itemStrId == null) return;
+        if (itemPackOverrides == null) itemPackOverrides = new HashMap<>();
+        if (packId == null || packId.equals("default") || packId.isEmpty()) {
+            itemPackOverrides.remove(itemStrId);
+        } else {
+            itemPackOverrides.put(itemStrId, packId);
+        }
     }
 
     private static class ConfigData {
@@ -76,7 +100,8 @@ public class ModConfig {
         boolean applyToMobsAndArmorStands = false;
         boolean applyToItemFrames = false;
         List<String> filteredItems = new ArrayList<>();
+        Map<String, String> itemPackOverrides = new HashMap<>();
+        String mainOverridePackId = "top";
         String baseResourcePackId = "vanilla";
     }
 }
-

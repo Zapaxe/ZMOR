@@ -2,12 +2,15 @@ package com.example.client.mixin;
 
 import com.example.ModConfig;
 import com.example.client.ItemRenderContext;
+import com.example.client.ItemRenderContext.TargetType;
+import com.example.client.VanillaItemSpriteSource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.item.ItemModelResolver;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -15,6 +18,7 @@ import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.ItemOwner;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -34,19 +38,21 @@ public class ItemModelResolverMixin {
                                     CallbackInfo ci) {
         Minecraft client = Minecraft.getInstance();
         if (client.player == null || entity == null) {
-            ItemRenderContext.setLocalPlayer(true);
+            ItemRenderContext.setTarget(TargetType.LOCAL_PLAYER);
             return;
         }
         if (entity.getUUID().equals(client.player.getUUID())) {
-            ItemRenderContext.setLocalPlayer(true);
+            ItemRenderContext.setTarget(TargetType.LOCAL_PLAYER);
+        } else if (entity instanceof Player) {
+            ItemRenderContext.setTarget(TargetType.OTHER_PLAYER);
         } else {
-            ItemRenderContext.setLocalPlayer(ModConfig.applyToOtherPlayers);
+            ItemRenderContext.setTarget(TargetType.MOB_OR_ARMOR_STAND);
         }
     }
 
     @Inject(method = "updateForLiving", at = @At("RETURN"))
     private void afterUpdateForLiving(CallbackInfo ci) {
-        ItemRenderContext.setLocalPlayer(true);
+        ItemRenderContext.setTarget(TargetType.LOCAL_PLAYER);
     }
 
     @Inject(method = "updateForNonLiving", at = @At("HEAD"))
@@ -54,37 +60,75 @@ public class ItemModelResolverMixin {
                                        ItemDisplayContext displayContext, Entity entity,
                                        CallbackInfo ci) {
         Minecraft client = Minecraft.getInstance();
-        if (client.player == null) {
-            ItemRenderContext.setLocalPlayer(true);
+        if (client.player == null || entity == null) {
+            ItemRenderContext.setTarget(TargetType.LOCAL_PLAYER);
             return;
         }
         if (entity instanceof ItemFrame) {
-            ItemRenderContext.setLocalPlayer(ModConfig.applyToItemFrames);
+            ItemRenderContext.setTarget(TargetType.ITEM_FRAME);
         } else if (entity instanceof ArmorStand) {
-            ItemRenderContext.setLocalPlayer(ModConfig.applyToMobsAndArmorStands);
+            ItemRenderContext.setTarget(TargetType.MOB_OR_ARMOR_STAND);
         } else if (entity instanceof ItemEntity) {
-            ItemRenderContext.setLocalPlayer(true);
+            ItemRenderContext.setTarget(TargetType.WORLD_ITEM);
         } else {
-            ItemRenderContext.setLocalPlayer(ModConfig.applyToMobsAndArmorStands);
+            ItemRenderContext.setTarget(TargetType.MOB_OR_ARMOR_STAND);
         }
     }
 
     @Inject(method = "updateForNonLiving", at = @At("RETURN"))
     private void afterUpdateForNonLiving(CallbackInfo ci) {
-        ItemRenderContext.setLocalPlayer(true);
+        ItemRenderContext.setTarget(TargetType.LOCAL_PLAYER);
     }
 
     @Inject(method = "appendItemLayers", at = @At("RETURN"))
     private void afterAppendItemLayers(ItemStackRenderState state, ItemStack stack,
                                         ItemDisplayContext displayContext, Level level,
                                         ItemOwner itemOwner, int seed, CallbackInfo ci) {
-        boolean shouldRemap = !ItemRenderContext.isLocalPlayer() || !ModConfig.shouldApplyTo(stack);
-        if (shouldRemap) {
-            remapToVanilla(state);
+        TargetType target = ItemRenderContext.getTarget();
+        Identifier itemId = stack != null && !stack.isEmpty() ? BuiltInRegistries.ITEM.getKey(stack.getItem()) : null;
+        String itemStrId = itemId != null ? itemId.toString() : null;
+        String perItemPack = itemStrId != null ? ModConfig.getItemPack(itemStrId) : "default";
+
+        if (target == TargetType.LOCAL_PLAYER || target == TargetType.WORLD_ITEM) {
+            if (!perItemPack.equals("default")) {
+                if (perItemPack.equals("vanilla")) {
+                    remapToNamespace(state, "zmor-vanilla");
+                } else {
+                    String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
+                    remapToNamespace(state, packNs);
+                }
+            }
+            return;
+        }
+
+        if (ModConfig.isItemWhitelisted(stack)) {
+            boolean allowCustom = switch (target) {
+                case OTHER_PLAYER -> ModConfig.applyToOtherPlayers;
+                case MOB_OR_ARMOR_STAND -> ModConfig.applyToMobsAndArmorStands;
+                case ITEM_FRAME -> ModConfig.applyToItemFrames;
+                default -> true;
+            };
+            if (!allowCustom) {
+                remapToNamespace(state, "zmor-vanilla");
+            } else if (!perItemPack.equals("default")) {
+                if (perItemPack.equals("vanilla")) {
+                    remapToNamespace(state, "zmor-vanilla");
+                } else {
+                    String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
+                    remapToNamespace(state, packNs);
+                }
+            }
+        } else if (!perItemPack.equals("default")) {
+            if (perItemPack.equals("vanilla")) {
+                remapToNamespace(state, "zmor-vanilla");
+            } else {
+                String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
+                remapToNamespace(state, packNs);
+            }
         }
     }
 
-    private void remapToVanilla(ItemStackRenderState state) {
+    private void remapToNamespace(ItemStackRenderState state, String targetNamespace) {
         TextureAtlas atlas = (TextureAtlas) Minecraft.getInstance().getTextureManager()
                 .getTexture(TextureAtlas.LOCATION_ITEMS);
         if (atlas == null) return;
@@ -94,11 +138,11 @@ public class ItemModelResolverMixin {
         ItemStackRenderState.LayerRenderState[] layers = accessor.getLayers();
 
         for (int i = 0; i < layerCount; i++) {
-            remapLayer(layers[i], atlas);
+            remapLayer(layers[i], atlas, targetNamespace);
         }
     }
 
-    private void remapLayer(ItemStackRenderState.LayerRenderState layer, TextureAtlas atlas) {
+    private void remapLayer(ItemStackRenderState.LayerRenderState layer, TextureAtlas atlas, String targetNamespace) {
         LayerRenderStateAccessor layerAccessor = (LayerRenderStateAccessor) (Object) layer;
         List<BakedQuad> quads = layerAccessor.getQuads();
         if (quads == null || quads.isEmpty()) return;
@@ -110,15 +154,14 @@ public class ItemModelResolverMixin {
             if (originalSprite == null) continue;
 
             Identifier spriteId = originalSprite.contents().name();
-            String namespace = spriteId.getNamespace();
             String path = spriteId.getPath();
-            if (!namespace.equals("minecraft") || !path.startsWith("item/")) continue;
+            if (!path.startsWith("item/")) continue;
 
-            Identifier vanillaId = Identifier.fromNamespaceAndPath("zmor-vanilla", path);
-            TextureAtlasSprite vanillaSprite = atlas.getSprite(vanillaId);
-            if (vanillaSprite == null || vanillaSprite == atlas.missingSprite()) continue;
+            Identifier customId = Identifier.fromNamespaceAndPath(targetNamespace, path);
+            TextureAtlasSprite customSprite = atlas.getSprite(customId);
+            if (customSprite == null || customSprite == atlas.missingSprite()) continue;
 
-            quads.set(i, remapQuad(quad, originalSprite, vanillaSprite));
+            quads.set(i, remapQuad(quad, originalSprite, customSprite));
             anyRemapped = true;
         }
 
@@ -126,11 +169,11 @@ public class ItemModelResolverMixin {
             TextureAtlasSprite icon = layerAccessor.getParticleIcon();
             if (icon != null) {
                 Identifier iconId = icon.contents().name();
-                if (iconId.getNamespace().equals("minecraft") && iconId.getPath().startsWith("item/")) {
-                    Identifier vanillaIconId = Identifier.fromNamespaceAndPath("zmor-vanilla", iconId.getPath());
-                    TextureAtlasSprite vanillaIcon = atlas.getSprite(vanillaIconId);
-                    if (vanillaIcon != null && vanillaIcon != atlas.missingSprite()) {
-                        layerAccessor.setParticleIcon(vanillaIcon);
+                if (iconId.getPath().startsWith("item/")) {
+                    Identifier customIconId = Identifier.fromNamespaceAndPath(targetNamespace, iconId.getPath());
+                    TextureAtlasSprite customIcon = atlas.getSprite(customIconId);
+                    if (customIcon != null && customIcon != atlas.missingSprite()) {
+                        layerAccessor.setParticleIcon(customIcon);
                     }
                 }
             }
@@ -149,15 +192,15 @@ public class ItemModelResolverMixin {
         return ((long) Float.floatToRawIntBits(u) << 32) | (Float.floatToRawIntBits(v) & 0xFFFFFFFFL);
     }
 
-    private BakedQuad remapQuad(BakedQuad quad, TextureAtlasSprite original, TextureAtlasSprite vanilla) {
+    private BakedQuad remapQuad(BakedQuad quad, TextureAtlasSprite original, TextureAtlasSprite target) {
         float u0 = original.getU0();
         float v0 = original.getV0();
         float u1 = original.getU1();
         float v1 = original.getV1();
-        float u0v = vanilla.getU0();
-        float v0v = vanilla.getV0();
-        float u1v = vanilla.getU1();
-        float v1v = vanilla.getV1();
+        float u0v = target.getU0();
+        float v0v = target.getV0();
+        float u1v = target.getU1();
+        float v1v = target.getV1();
 
         float uScale = (u1v - u0v) / (u1 - u0);
         float vScale = (v1v - v0v) / (v1 - v0);
@@ -175,7 +218,7 @@ public class ItemModelResolverMixin {
         return new BakedQuad(
             quad.position0(), quad.position1(), quad.position2(), quad.position3(),
             newUVs[0], newUVs[1], newUVs[2], newUVs[3],
-            quad.tintIndex(), quad.direction(), vanilla,
+            quad.tintIndex(), quad.direction(), target,
             quad.shade(), quad.lightEmission()
         );
     }

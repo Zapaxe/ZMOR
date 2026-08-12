@@ -1,20 +1,34 @@
 package com.example.client;
 
-import net.minecraft.client.Minecraft;
-
 public final class ItemRenderContext {
-    private static final ThreadLocal<Boolean> IS_LOCAL_PLAYER = ThreadLocal.withInitial(() -> true);
+    public enum TargetType {
+        LOCAL_PLAYER,
+        OTHER_PLAYER,
+        MOB_OR_ARMOR_STAND,
+        ITEM_FRAME,
+        WORLD_ITEM
+    }
+
+    private static final ThreadLocal<TargetType> CURRENT_TARGET = ThreadLocal.withInitial(() -> TargetType.LOCAL_PLAYER);
+
+    public static TargetType getTarget() {
+        return CURRENT_TARGET.get();
+    }
+
+    public static void setTarget(TargetType target) {
+        CURRENT_TARGET.set(target != null ? target : TargetType.LOCAL_PLAYER);
+    }
 
     public static boolean isLocalPlayer() {
-        return IS_LOCAL_PLAYER.get();
+        return CURRENT_TARGET.get() == TargetType.LOCAL_PLAYER;
     }
 
     public static void setLocalPlayer(boolean isLocal) {
-        IS_LOCAL_PLAYER.set(isLocal);
+        CURRENT_TARGET.set(isLocal ? TargetType.LOCAL_PLAYER : TargetType.OTHER_PLAYER);
     }
 
     public static void cleanup() {
-        IS_LOCAL_PLAYER.remove();
+        CURRENT_TARGET.remove();
     }
 
     private ItemRenderContext() {}

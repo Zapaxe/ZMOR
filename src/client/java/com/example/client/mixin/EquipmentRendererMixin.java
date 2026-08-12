@@ -2,6 +2,7 @@ package com.example.client.mixin;
 
 import com.example.ModConfig;
 import com.example.client.LocalPlayerRenderStateAccessor;
+import com.example.client.VanillaItemSpriteSource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -13,6 +14,7 @@ import net.minecraft.client.resources.model.EquipmentClientInfo;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.equipment.EquipmentAsset;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
@@ -74,21 +76,34 @@ public class EquipmentRendererMixin {
             }
         }
 
+        Identifier itemRegId = stack != null && !stack.isEmpty() ? BuiltInRegistries.ITEM.getKey(stack.getItem()) : null;
+        String itemStrId = itemRegId != null ? itemRegId.toString() : null;
+        String perItemPack = itemStrId != null ? ModConfig.getItemPack(itemStrId) : "default";
+
         boolean useCustom = true;
-        if (!ModConfig.shouldApplyTo(stack)) {
-            useCustom = false;
-        } else if (isOtherPlayer) {
-            if (!ModConfig.applyToOtherPlayers) {
-                useCustom = false;
-            }
-        } else if (!isLocalPlayer) {
-            if (!ModConfig.applyToMobsAndArmorStands) {
-                useCustom = false;
+        if (isLocalPlayer) {
+            useCustom = true;
+        } else {
+            if (ModConfig.isItemWhitelisted(stack)) {
+                if (isOtherPlayer) {
+                    useCustom = ModConfig.applyToOtherPlayers;
+                } else {
+                    useCustom = ModConfig.applyToMobsAndArmorStands;
+                }
+            } else {
+                useCustom = true;
             }
         }
 
         if (!useCustom) {
             textureId = Identifier.fromNamespaceAndPath("zmor-vanilla", textureId.getPath());
+        } else if (!perItemPack.equals("default")) {
+            if (perItemPack.equals("vanilla")) {
+                textureId = Identifier.fromNamespaceAndPath("zmor-vanilla", textureId.getPath());
+            } else {
+                String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
+                textureId = Identifier.fromNamespaceAndPath(packNs, textureId.getPath());
+            }
         }
 
         return RenderTypes.armorCutoutNoCull(textureId);

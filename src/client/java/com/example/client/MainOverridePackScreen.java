@@ -16,10 +16,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
-public class BaseResourcePackScreen extends Screen {
+public class MainOverridePackScreen extends Screen {
     private final Screen parent;
-    private final List<Pack> allPacks = new ArrayList<>();
-    private List<Pack> filteredPacks = new ArrayList<>();
+    private final List<PackEntry> allPacks = new ArrayList<>();
+    private List<PackEntry> filteredPacks = new ArrayList<>();
     private EditBox searchBox;
     private int page = 0;
     private static final int PACKS_PER_PAGE = 4;
@@ -27,15 +27,34 @@ public class BaseResourcePackScreen extends Screen {
     private Button prevButton;
     private Button nextButton;
 
-    public BaseResourcePackScreen(Screen parent) {
-        super(Component.literal("Fallback Base Resource Pack"));
+    public static class PackEntry {
+        public final String id;
+        public final String title;
+        public final String description;
+
+        public PackEntry(String id, String title, String description) {
+            this.id = id;
+            this.title = title;
+            this.description = description;
+        }
+    }
+
+    public MainOverridePackScreen(Screen parent) {
+        super(Component.literal("Main Override Pack"));
         this.parent = parent;
+
+        // Add Default Top Active Pack option first
+        allPacks.add(new PackEntry("top", "Top Active Pack (Default)", "Automatically uses highest priority loaded resource pack"));
 
         PackRepository repo = Minecraft.getInstance().getResourcePackRepository();
         if (repo != null) {
             for (Pack pack : repo.getSelectedPacks()) {
                 if (isUserTexturePack(pack)) {
-                    allPacks.add(pack);
+                    allPacks.add(new PackEntry(
+                            pack.getId(),
+                            pack.getTitle().getString(),
+                            pack.getDescription().getString()
+                    ));
                 }
             }
         }
@@ -111,9 +130,9 @@ public class BaseResourcePackScreen extends Screen {
             int currentIdx = startIdx + i;
             if (currentIdx >= filteredPacks.size()) break;
 
-            Pack pack = filteredPacks.get(currentIdx);
-            String packId = pack.getId();
-            boolean isSelected = ModConfig.baseResourcePackId.equals(packId);
+            PackEntry pack = filteredPacks.get(currentIdx);
+            String packId = pack.id;
+            boolean isSelected = ModConfig.mainOverridePackId.equals(packId);
 
             int cardY = startY + i * cardSpacing;
 
@@ -121,13 +140,13 @@ public class BaseResourcePackScreen extends Screen {
                 this.addRenderableWidget(Button.builder(
                         Component.literal("Select"),
                         button -> {
-                            ModConfig.baseResourcePackId = packId;
+                            ModConfig.mainOverridePackId = packId;
                             ModConfig.save();
                             Minecraft.getInstance().reloadResourcePacks();
                             rebuildWidgets();
                         }
                 ).bounds(startX + cardWidth - 62, cardY + 7, 54, 18)
-                .tooltip(Tooltip.create(Component.literal("Set as the active fallback base resource pack")))
+                .tooltip(Tooltip.create(Component.literal("Set as Main Override Pack")))
                 .build());
             }
         }
@@ -140,8 +159,8 @@ public class BaseResourcePackScreen extends Screen {
         this.filteredPacks = allPacks.stream()
                 .filter(p -> {
                     if (q.isEmpty()) return true;
-                    return p.getTitle().getString().toLowerCase(Locale.ROOT).contains(q)
-                            || p.getId().toLowerCase(Locale.ROOT).contains(q);
+                    return p.title.toLowerCase(Locale.ROOT).contains(q)
+                            || p.id.toLowerCase(Locale.ROOT).contains(q);
                 })
                 .collect(Collectors.toList());
         this.page = 0;
@@ -165,8 +184,8 @@ public class BaseResourcePackScreen extends Screen {
         int startX = (this.width - cardWidth) / 2;
 
         // Header Title and Info Subtitle
-        graphics.drawCenteredString(this.font, "§f§lFallback Base Resource Pack", this.width / 2, 10, 0xFFFFFFFF);
-        graphics.drawCenteredString(this.font, "§7Fallback textures for non-whitelisted items are sourced from this pack", this.width / 2, 21, 0xFFAAAAAA);
+        graphics.drawCenteredString(this.font, "§f§lMain Override Pack", this.width / 2, 10, 0xFFFFFFFF);
+        graphics.drawCenteredString(this.font, "§7Select the primary resource pack for your custom textures & models", this.width / 2, 21, 0xFFAAAAAA);
 
         // Pack Cards
         int startY = 68;
@@ -178,9 +197,9 @@ public class BaseResourcePackScreen extends Screen {
             int currentIdx = startIdx + i;
             if (currentIdx >= filteredPacks.size()) break;
 
-            Pack pack = filteredPacks.get(currentIdx);
-            String packId = pack.getId();
-            boolean isSelected = ModConfig.baseResourcePackId.equals(packId);
+            PackEntry pack = filteredPacks.get(currentIdx);
+            String packId = pack.id;
+            boolean isSelected = ModConfig.mainOverridePackId.equals(packId);
 
             int cardY = startY + i * cardSpacing;
             boolean isHovered = mouseX >= startX && mouseX <= startX + cardWidth &&
@@ -192,13 +211,13 @@ public class BaseResourcePackScreen extends Screen {
             int outlineColor = isSelected ? 0xFF00E676 : (isHovered ? 0x60FFFFFF : 0x20FFFFFF);
             graphics.renderOutline(startX, cardY, cardWidth, cardHeight, outlineColor);
 
-            String title = pack.getTitle().getString();
+            String title = pack.title;
             if (title.length() > 30) {
                 title = title.substring(0, 28) + "...";
             }
             graphics.drawString(this.font, (isSelected ? "§a§l" : "§f§l") + title, startX + 8, cardY + 6, 0xFFFFFFFF);
 
-            String desc = pack.getDescription().getString().replaceAll("\n", " ");
+            String desc = pack.description.replaceAll("\n", " ");
             if (desc.isEmpty() || desc.equals(title)) {
                 desc = "ID: " + packId;
             }

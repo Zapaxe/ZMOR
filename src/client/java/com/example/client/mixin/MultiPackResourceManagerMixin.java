@@ -1,6 +1,7 @@
 package com.example.client.mixin;
 
 import com.example.ModConfig;
+import com.example.client.VanillaItemSpriteSource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackType;
@@ -30,19 +31,46 @@ public class MultiPackResourceManagerMixin {
         if (zmor$fallbackGuard.get()) {
             return;
         }
-        if (id.getNamespace().equals("zmor-vanilla")) {
+
+        String namespace = id.getNamespace();
+
+        // 1. Custom Per-Item Pack Lookups: zmor-pk-<sanitizedPackId>
+        if (namespace.startsWith("zmor-pk-")) {
+            String sanitizedPack = namespace.substring("zmor-pk-".length());
             Identifier originalId = Identifier.fromNamespaceAndPath("minecraft", id.getPath());
-            
+            PackResources targetPack = zmor$getPackResourcesBySanitizedId(sanitizedPack);
+            if (targetPack != null) {
+                IoSupplier<InputStream> supplier = targetPack.getResource(PackType.CLIENT_RESOURCES, originalId);
+                if (supplier != null) {
+                    cir.setReturnValue(Optional.of(new Resource(targetPack, supplier)));
+                    return;
+                }
+                if (originalId.getPath().startsWith("textures/entity/equipment/")) {
+                    Identifier oldId = toOldArmorPath(originalId);
+                    if (oldId != null) {
+                        IoSupplier<InputStream> oldSupplier = targetPack.getResource(PackType.CLIENT_RESOURCES, oldId);
+                        if (oldSupplier != null) {
+                            cir.setReturnValue(Optional.of(new Resource(targetPack, oldSupplier)));
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Default Fallback Base Lookups: zmor-vanilla
+        if (namespace.equals("zmor-vanilla")) {
+            Identifier originalId = Identifier.fromNamespaceAndPath("minecraft", id.getPath());
+
             // 1. Try configured base pack
             PackResources basePack = zmor$getBasePackResources();
             if (basePack != null) {
-                // Try new format
                 IoSupplier<InputStream> supplier = basePack.getResource(PackType.CLIENT_RESOURCES, originalId);
                 if (supplier != null) {
                     cir.setReturnValue(Optional.of(new Resource(basePack, supplier)));
                     return;
                 }
-                
+
                 // Try old format if it's armor
                 if (originalId.getPath().startsWith("textures/entity/equipment/")) {
                     Identifier oldId = toOldArmorPath(originalId);
@@ -55,18 +83,16 @@ public class MultiPackResourceManagerMixin {
                     }
                 }
             }
-            
+
             // 2. Try vanilla pack fallback
             VanillaPackResources vanillaPack = Minecraft.getInstance().getVanillaPackResources();
             if (vanillaPack != null) {
-                // Try new format
                 IoSupplier<InputStream> supplier = vanillaPack.getResource(PackType.CLIENT_RESOURCES, originalId);
                 if (supplier != null) {
                     cir.setReturnValue(Optional.of(new Resource(vanillaPack, supplier)));
                     return;
                 }
-                
-                // Try old format if it's armor
+
                 if (originalId.getPath().startsWith("textures/entity/equipment/")) {
                     Identifier oldId = toOldArmorPath(originalId);
                     if (oldId != null) {
@@ -83,7 +109,7 @@ public class MultiPackResourceManagerMixin {
 
     @Inject(method = "getResource", at = @At("RETURN"), cancellable = true)
     private void fallbackOldArmorPaths(Identifier id, CallbackInfoReturnable<Optional<Resource>> cir) {
-        if (id.getNamespace().equals("zmor-vanilla")) {
+        if (id.getNamespace().startsWith("zmor-")) {
             return;
         }
         if (!id.getPath().startsWith("textures/entity/equipment/")) {
@@ -114,12 +140,12 @@ public class MultiPackResourceManagerMixin {
     private PackResources zmor$getBasePackResources() {
         Minecraft client = Minecraft.getInstance();
         if (client == null) return null;
-        
+
         String targetId = ModConfig.baseResourcePackId;
         if ("vanilla".equals(targetId) || targetId == null) {
             return client.getVanillaPackResources();
         }
-        
+
         List<PackResources> openPacks = ((MultiPackResourceManagerAccessor) this).getPacks();
         if (openPacks != null) {
             for (PackResources pack : openPacks) {
@@ -129,6 +155,26 @@ public class MultiPackResourceManagerMixin {
             }
         }
         return client.getVanillaPackResources();
+    }
+
+    @Unique
+    private PackResources zmor$getPackResourcesBySanitizedId(String sanitized) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || sanitized == null) return null;
+
+        if ("vanilla".equals(sanitized)) {
+            return client.getVanillaPackResources();
+        }
+
+        List<PackResources> openPacks = ((MultiPackResourceManagerAccessor) this).getPacks();
+        if (openPacks != null) {
+            for (PackResources pack : openPacks) {
+                if (VanillaItemSpriteSource.sanitizePackId(pack.packId()).equals(sanitized)) {
+                    return pack;
+                }
+            }
+        }
+        return null;
     }
 
     @Unique

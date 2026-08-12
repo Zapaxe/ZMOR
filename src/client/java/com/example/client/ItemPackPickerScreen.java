@@ -7,19 +7,28 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.repository.Pack;
 import net.minecraft.server.packs.repository.PackRepository;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
-public class BaseResourcePackScreen extends Screen {
+public class ItemPackPickerScreen extends Screen {
     private final Screen parent;
-    private final List<Pack> allPacks = new ArrayList<>();
-    private List<Pack> filteredPacks = new ArrayList<>();
+    private final String itemStrId;
+    private final ItemStack itemStack;
+    private final String itemDisplayName;
+
+    private final List<PackEntry> allPacks = new ArrayList<>();
+    private List<PackEntry> filteredPacks = new ArrayList<>();
     private EditBox searchBox;
     private int page = 0;
     private static final int PACKS_PER_PAGE = 4;
@@ -27,15 +36,55 @@ public class BaseResourcePackScreen extends Screen {
     private Button prevButton;
     private Button nextButton;
 
-    public BaseResourcePackScreen(Screen parent) {
-        super(Component.literal("Fallback Base Resource Pack"));
-        this.parent = parent;
+    public static class PackEntry {
+        public final String id;
+        public final String title;
+        public final String description;
 
+        public PackEntry(String id, String title, String description) {
+            this.id = id;
+            this.title = title;
+            this.description = description;
+        }
+    }
+
+    public ItemPackPickerScreen(Screen parent, String itemStrId) {
+        super(Component.literal("Select Resource Pack"));
+        this.parent = parent;
+        this.itemStrId = itemStrId;
+
+        // Resolve item stack & name
+        Identifier id = Identifier.tryParse(itemStrId);
+        ItemStack stack = ItemStack.EMPTY;
+        String name = itemStrId;
+        if (id != null) {
+            Item item = BuiltInRegistries.ITEM.get(id)
+                    .map(net.minecraft.core.Holder.Reference::value)
+                    .orElse(Items.AIR);
+            if (item != Items.AIR) {
+                stack = new ItemStack(item);
+                name = Component.translatable(item.getDescriptionId()).getString();
+            }
+        }
+        this.itemStack = stack;
+        this.itemDisplayName = name;
+
+        // 1. Default (Global Setting)
+        allPacks.add(new PackEntry("default", "Default (Global Override)", "Inherits the global Main Override Pack configuration"));
+
+        // 2. Built-in Vanilla
+        allPacks.add(new PackEntry("vanilla", "Default Vanilla", "Built-in standard Minecraft textures"));
+
+        // 3. User Texture Packs
         PackRepository repo = Minecraft.getInstance().getResourcePackRepository();
         if (repo != null) {
             for (Pack pack : repo.getSelectedPacks()) {
                 if (isUserTexturePack(pack)) {
-                    allPacks.add(pack);
+                    allPacks.add(new PackEntry(
+                            pack.getId(),
+                            pack.getTitle().getString(),
+                            pack.getDescription().getString()
+                    ));
                 }
             }
         }
@@ -85,7 +134,7 @@ public class BaseResourcePackScreen extends Screen {
         ).bounds(bottomStartX, bottomY, prevNextWidth, 20).build());
 
         this.addRenderableWidget(Button.builder(
-                Component.literal("Done"),
+                Component.literal("Back"),
                 button -> {
                     ModConfig.save();
                     this.minecraft.setScreen(this.parent);
@@ -106,14 +155,15 @@ public class BaseResourcePackScreen extends Screen {
         int startY = 68;
         int cardSpacing = 36;
         int startIdx = page * PACKS_PER_PAGE;
+        String currentPack = ModConfig.getItemPack(itemStrId);
 
         for (int i = 0; i < PACKS_PER_PAGE; i++) {
             int currentIdx = startIdx + i;
             if (currentIdx >= filteredPacks.size()) break;
 
-            Pack pack = filteredPacks.get(currentIdx);
-            String packId = pack.getId();
-            boolean isSelected = ModConfig.baseResourcePackId.equals(packId);
+            PackEntry pack = filteredPacks.get(currentIdx);
+            String packId = pack.id;
+            boolean isSelected = currentPack.equals(packId);
 
             int cardY = startY + i * cardSpacing;
 
@@ -121,13 +171,13 @@ public class BaseResourcePackScreen extends Screen {
                 this.addRenderableWidget(Button.builder(
                         Component.literal("Select"),
                         button -> {
-                            ModConfig.baseResourcePackId = packId;
+                            ModConfig.setItemPack(itemStrId, packId);
                             ModConfig.save();
                             Minecraft.getInstance().reloadResourcePacks();
                             rebuildWidgets();
                         }
                 ).bounds(startX + cardWidth - 62, cardY + 7, 54, 18)
-                .tooltip(Tooltip.create(Component.literal("Set as the active fallback base resource pack")))
+                .tooltip(Tooltip.create(Component.literal("Load " + itemDisplayName + " textures from this pack")))
                 .build());
             }
         }
@@ -140,8 +190,8 @@ public class BaseResourcePackScreen extends Screen {
         this.filteredPacks = allPacks.stream()
                 .filter(p -> {
                     if (q.isEmpty()) return true;
-                    return p.getTitle().getString().toLowerCase(Locale.ROOT).contains(q)
-                            || p.getId().toLowerCase(Locale.ROOT).contains(q);
+                    return p.title.toLowerCase(Locale.ROOT).contains(q)
+                            || p.id.toLowerCase(Locale.ROOT).contains(q);
                 })
                 .collect(Collectors.toList());
         this.page = 0;
@@ -164,23 +214,27 @@ public class BaseResourcePackScreen extends Screen {
         int cardWidth = 340;
         int startX = (this.width - cardWidth) / 2;
 
-        // Header Title and Info Subtitle
-        graphics.drawCenteredString(this.font, "§f§lFallback Base Resource Pack", this.width / 2, 10, 0xFFFFFFFF);
-        graphics.drawCenteredString(this.font, "§7Fallback textures for non-whitelisted items are sourced from this pack", this.width / 2, 21, 0xFFAAAAAA);
+        // Render item icon & header
+        if (!itemStack.isEmpty()) {
+            graphics.renderFakeItem(itemStack, startX, 8);
+        }
+        graphics.drawString(this.font, "§f§lTexture Source for §e" + itemDisplayName, startX + 22, 10, 0xFFFFFFFF);
+        graphics.drawCenteredString(this.font, "§7Choose which resource pack supplies textures for this item", this.width / 2, 24, 0xFFAAAAAA);
 
         // Pack Cards
         int startY = 68;
         int cardHeight = 32;
         int cardSpacing = 36;
         int startIdx = page * PACKS_PER_PAGE;
+        String currentPack = ModConfig.getItemPack(itemStrId);
 
         for (int i = 0; i < PACKS_PER_PAGE; i++) {
             int currentIdx = startIdx + i;
             if (currentIdx >= filteredPacks.size()) break;
 
-            Pack pack = filteredPacks.get(currentIdx);
-            String packId = pack.getId();
-            boolean isSelected = ModConfig.baseResourcePackId.equals(packId);
+            PackEntry pack = filteredPacks.get(currentIdx);
+            String packId = pack.id;
+            boolean isSelected = currentPack.equals(packId);
 
             int cardY = startY + i * cardSpacing;
             boolean isHovered = mouseX >= startX && mouseX <= startX + cardWidth &&
@@ -192,13 +246,13 @@ public class BaseResourcePackScreen extends Screen {
             int outlineColor = isSelected ? 0xFF00E676 : (isHovered ? 0x60FFFFFF : 0x20FFFFFF);
             graphics.renderOutline(startX, cardY, cardWidth, cardHeight, outlineColor);
 
-            String title = pack.getTitle().getString();
+            String title = pack.title;
             if (title.length() > 30) {
                 title = title.substring(0, 28) + "...";
             }
             graphics.drawString(this.font, (isSelected ? "§a§l" : "§f§l") + title, startX + 8, cardY + 6, 0xFFFFFFFF);
 
-            String desc = pack.getDescription().getString().replaceAll("\n", " ");
+            String desc = pack.description.replaceAll("\n", " ");
             if (desc.isEmpty() || desc.equals(title)) {
                 desc = "ID: " + packId;
             }
