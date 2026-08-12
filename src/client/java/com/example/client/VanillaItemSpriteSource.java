@@ -72,6 +72,9 @@ public class VanillaItemSpriteSource implements SpriteSource {
                 }
             }
         }
+
+        // Broadcast updated texture manifest whenever resources are loaded/reloaded
+        ClientNetworking.broadcastLocalManifest();
     }
 
     private PackResources getBasePackResources(ResourceManager resourceManager) {

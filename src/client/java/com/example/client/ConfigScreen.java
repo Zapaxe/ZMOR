@@ -15,6 +15,7 @@ public class ConfigScreen extends Screen {
     private Button otherPlayersButton;
     private Button mobsButton;
     private Button itemFramesButton;
+    private Button syncPeersButton;
     private Button filterButton;
     private Button mainOverrideButton;
     private Button basePackButton;
@@ -29,21 +30,21 @@ public class ConfigScreen extends Screen {
         int panelWidth = 380;
         int startX = (this.width - panelWidth) / 2;
         int buttonWidth = 110;
-        int buttonHeight = 20;
+        int buttonHeight = 18;
         int buttonX = startX + panelWidth - buttonWidth - 12;
 
-        int summaryY = 30;
-        int section1Y = summaryY + 24;
-        int rowSpacing = 24;
+        int summaryY = 26;
+        int section1Y = summaryY + 20;
+        int rowSpacing = 22;
 
-        // Section 1: Visibility Scopes Buttons
+        // Section 1: Visibility Scopes Buttons (4 rows)
         this.otherPlayersButton = this.addRenderableWidget(
                 Button.builder(getToggleComponent(ModConfig.applyToOtherPlayers), button -> {
                     ModConfig.applyToOtherPlayers = !ModConfig.applyToOtherPlayers;
                     button.setMessage(getToggleComponent(ModConfig.applyToOtherPlayers));
                 })
-                .bounds(buttonX, section1Y + 16, buttonWidth, buttonHeight)
-                .tooltip(Tooltip.create(Component.literal("When enabled, custom textures also appear on other multiplayer peers.")))
+                .bounds(buttonX, section1Y + 14, buttonWidth, buttonHeight)
+                .tooltip(Tooltip.create(Component.literal("When enabled, your own custom textures also appear on other multiplayer peers.")))
                 .build()
         );
 
@@ -52,7 +53,7 @@ public class ConfigScreen extends Screen {
                     ModConfig.applyToMobsAndArmorStands = !ModConfig.applyToMobsAndArmorStands;
                     button.setMessage(getToggleComponent(ModConfig.applyToMobsAndArmorStands));
                 })
-                .bounds(buttonX, section1Y + 16 + rowSpacing, buttonWidth, buttonHeight)
+                .bounds(buttonX, section1Y + 14 + rowSpacing, buttonWidth, buttonHeight)
                 .tooltip(Tooltip.create(Component.literal("When enabled, custom armor and textures apply to mobs and armor stands.")))
                 .build()
         );
@@ -62,13 +63,28 @@ public class ConfigScreen extends Screen {
                     ModConfig.applyToItemFrames = !ModConfig.applyToItemFrames;
                     button.setMessage(getToggleComponent(ModConfig.applyToItemFrames));
                 })
-                .bounds(buttonX, section1Y + 16 + rowSpacing * 2, buttonWidth, buttonHeight)
+                .bounds(buttonX, section1Y + 14 + rowSpacing * 2, buttonWidth, buttonHeight)
                 .tooltip(Tooltip.create(Component.literal("When enabled, custom item textures apply to items mounted in item frames.")))
                 .build()
         );
 
+        this.syncPeersButton = this.addRenderableWidget(
+                Button.builder(getToggleComponent(ModConfig.syncPeerTextures), button -> {
+                    ModConfig.syncPeerTextures = !ModConfig.syncPeerTextures;
+                    button.setMessage(getToggleComponent(ModConfig.syncPeerTextures));
+                    if (!ModConfig.syncPeerTextures) {
+                        RemoteTextureManager.clear();
+                    } else {
+                        ClientNetworking.broadcastLocalManifest();
+                    }
+                })
+                .bounds(buttonX, section1Y + 14 + rowSpacing * 3, buttonWidth, buttonHeight)
+                .tooltip(Tooltip.create(Component.literal("When disabled, stops downloading textures from peers and displays standard vanilla textures on them.")))
+                .build()
+        );
+
         // Section 2: Resources & Filters Buttons (3 rows)
-        int section2Y = section1Y + 94;
+        int section2Y = section1Y + 106;
 
         // Row 1: Item Filter Whitelist
         this.filterButton = this.addRenderableWidget(
@@ -76,7 +92,7 @@ public class ConfigScreen extends Screen {
                     ModConfig.save();
                     this.minecraft.setScreen(new ItemFilterScreen(this));
                 })
-                .bounds(buttonX, section2Y + 16, buttonWidth, buttonHeight)
+                .bounds(buttonX, section2Y + 14, buttonWidth, buttonHeight)
                 .tooltip(Tooltip.create(Component.literal("Configure the whitelist of items to isolate with vanilla textures for other entities.")))
                 .build()
         );
@@ -87,7 +103,7 @@ public class ConfigScreen extends Screen {
                     ModConfig.save();
                     this.minecraft.setScreen(new MainOverridePackScreen(this));
                 })
-                .bounds(buttonX, section2Y + 16 + rowSpacing, buttonWidth, buttonHeight)
+                .bounds(buttonX, section2Y + 14 + rowSpacing, buttonWidth, buttonHeight)
                 .tooltip(Tooltip.create(Component.literal("Select the primary resource pack supplying your custom models and textures.")))
                 .build()
         );
@@ -98,7 +114,7 @@ public class ConfigScreen extends Screen {
                     ModConfig.save();
                     this.minecraft.setScreen(new BaseResourcePackScreen(this));
                 })
-                .bounds(buttonX, section2Y + 16 + rowSpacing * 2, buttonWidth, buttonHeight)
+                .bounds(buttonX, section2Y + 14 + rowSpacing * 2, buttonWidth, buttonHeight)
                 .tooltip(Tooltip.create(Component.literal("Select the fallback base pack supplying standard textures for non-local items.")))
                 .build()
         );
@@ -108,20 +124,21 @@ public class ConfigScreen extends Screen {
         int bottomSpacing = 12;
         int totalBottomWidth = bottomBtnWidth * 2 + bottomSpacing;
         int bottomStartX = (this.width - totalBottomWidth) / 2;
-        int bottomY = this.height - 24;
+        int bottomY = this.height - 22;
 
         this.addRenderableWidget(
                 Button.builder(Component.literal("Reset Defaults"), button -> {
                     ModConfig.applyToOtherPlayers = false;
                     ModConfig.applyToMobsAndArmorStands = false;
                     ModConfig.applyToItemFrames = false;
+                    ModConfig.syncPeerTextures = true;
                     ModConfig.filteredItems = new ArrayList<>();
                     ModConfig.mainOverridePackId = "top";
                     ModConfig.baseResourcePackId = "vanilla";
                     ModConfig.save();
                     this.rebuildWidgets();
                 })
-                .bounds(bottomStartX, bottomY, bottomBtnWidth, 20)
+                .bounds(bottomStartX, bottomY, bottomBtnWidth, 18)
                 .tooltip(Tooltip.create(Component.literal("Reset all configuration settings back to their default state.")))
                 .build()
         );
@@ -131,7 +148,7 @@ public class ConfigScreen extends Screen {
                     ModConfig.save();
                     this.minecraft.setScreen(this.parent);
                 })
-                .bounds(bottomStartX + bottomBtnWidth + bottomSpacing, bottomY, bottomBtnWidth, 20)
+                .bounds(bottomStartX + bottomBtnWidth + bottomSpacing, bottomY, bottomBtnWidth, 18)
                 .build()
         );
     }
@@ -148,13 +165,13 @@ public class ConfigScreen extends Screen {
         int startX = (this.width - panelWidth) / 2;
 
         // Title and Subtitle with clean typography
-        graphics.drawCenteredString(this.font, "§f§lZap's Model Only Resources §7(ZMOR)", this.width / 2, 6, 0xFFFFFFFF);
-        graphics.drawCenteredString(this.font, "§7Configure selective custom resource pack texture rendering", this.width / 2, 17, 0xFFAAAAAA);
+        graphics.drawCenteredString(this.font, "§f§lZap's Model Only Resources §7(ZMOR)", this.width / 2, 5, 0xFFFFFFFF);
+        graphics.drawCenteredString(this.font, "§7Configure selective custom resource pack texture rendering", this.width / 2, 15, 0xFFAAAAAA);
 
         // Top Summary Bar
-        int summaryY = 30;
-        graphics.fill(startX, summaryY, startX + panelWidth, summaryY + 18, 0x40000000);
-        graphics.renderOutline(startX, summaryY, panelWidth, 18, 0x20FFFFFF);
+        int summaryY = 26;
+        graphics.fill(startX, summaryY, startX + panelWidth, summaryY + 16, 0x40000000);
+        graphics.renderOutline(startX, summaryY, panelWidth, 16, 0x20FFFFFF);
 
         String overrideDisplay = ModConfig.mainOverridePackId.equals("top") ? "Top Pack" : ModConfig.mainOverridePackId;
         if (overrideDisplay.length() > 14) overrideDisplay = overrideDisplay.substring(0, 12) + "..";
@@ -164,51 +181,55 @@ public class ConfigScreen extends Screen {
 
         int filterCount = ModConfig.filteredItems.size();
 
-        graphics.drawString(this.font, "§7Override: §e" + overrideDisplay, startX + 8, summaryY + 5, 0xFFFFFFFF);
-        graphics.drawString(this.font, "§7Base: §e" + baseDisplay, startX + 138, summaryY + 5, 0xFFFFFFFF);
+        graphics.drawString(this.font, "§7Override: §e" + overrideDisplay, startX + 8, summaryY + 4, 0xFFFFFFFF);
+        graphics.drawString(this.font, "§7Base: §e" + baseDisplay, startX + 138, summaryY + 4, 0xFFFFFFFF);
         String countStr = "§7Whitelist: §b" + filterCount;
-        graphics.drawString(this.font, countStr, startX + panelWidth - this.font.width(countStr) - 8, summaryY + 5, 0xFFFFFFFF);
+        graphics.drawString(this.font, countStr, startX + panelWidth - this.font.width(countStr) - 8, summaryY + 4, 0xFFFFFFFF);
 
-        // Section 1: Visibility Scopes
-        int section1Y = summaryY + 24;
-        int section1Height = 88;
+        // Section 1: Visibility Scopes (4 rows)
+        int section1Y = summaryY + 20;
+        int section1Height = 102;
         graphics.fill(startX, section1Y, startX + panelWidth, section1Y + section1Height, 0x30000000);
         graphics.renderOutline(startX, section1Y, panelWidth, section1Height, 0x20FFFFFF);
 
-        graphics.drawString(this.font, "§f§lEntity Visibility Scopes", startX + 10, section1Y + 5, 0xFFFFFFFF);
+        graphics.drawString(this.font, "§f§lMultiplayer & Visibility Scopes", startX + 10, section1Y + 4, 0xFFFFFFFF);
 
-        int rowSpacing = 24;
+        int rowSpacing = 22;
         // Row 1
-        graphics.drawString(this.font, "Other Players", startX + 12, section1Y + 18, 0xFFFFFFFF);
-        graphics.drawString(this.font, "§7Show custom textures on multiplayer peers", startX + 12, section1Y + 28, 0xFFAAAAAA);
+        graphics.drawString(this.font, "Other Players", startX + 12, section1Y + 15, 0xFFFFFFFF);
+        graphics.drawString(this.font, "§7Show your custom textures on peers", startX + 12, section1Y + 24, 0xFFAAAAAA);
 
         // Row 2
-        graphics.drawString(this.font, "Mobs & Armor Stands", startX + 12, section1Y + 18 + rowSpacing, 0xFFFFFFFF);
-        graphics.drawString(this.font, "§7Show custom armor on mobs & armor stands", startX + 12, section1Y + 28 + rowSpacing, 0xFFAAAAAA);
+        graphics.drawString(this.font, "Mobs & Armor Stands", startX + 12, section1Y + 15 + rowSpacing, 0xFFFFFFFF);
+        graphics.drawString(this.font, "§7Show custom armor on mobs & armor stands", startX + 12, section1Y + 24 + rowSpacing, 0xFFAAAAAA);
 
         // Row 3
-        graphics.drawString(this.font, "Item Frames", startX + 12, section1Y + 18 + rowSpacing * 2, 0xFFFFFFFF);
-        graphics.drawString(this.font, "§7Show custom item textures in item frames", startX + 12, section1Y + 28 + rowSpacing * 2, 0xFFAAAAAA);
+        graphics.drawString(this.font, "Item Frames", startX + 12, section1Y + 15 + rowSpacing * 2, 0xFFFFFFFF);
+        graphics.drawString(this.font, "§7Show custom item textures in item frames", startX + 12, section1Y + 24 + rowSpacing * 2, 0xFFAAAAAA);
 
-        // Section 2: Resources & Filters
-        int section2Y = section1Y + 94;
-        int section2Height = 88;
+        // Row 4
+        graphics.drawString(this.font, "Sync Peer Packs", startX + 12, section1Y + 15 + rowSpacing * 3, 0xFFFFFFFF);
+        graphics.drawString(this.font, "§7Download & view custom packs from other players", startX + 12, section1Y + 24 + rowSpacing * 3, 0xFFAAAAAA);
+
+        // Section 2: Resources & Filters (3 rows)
+        int section2Y = section1Y + 106;
+        int section2Height = 82;
         graphics.fill(startX, section2Y, startX + panelWidth, section2Y + section2Height, 0x30000000);
         graphics.renderOutline(startX, section2Y, panelWidth, section2Height, 0x20FFFFFF);
 
-        graphics.drawString(this.font, "§f§lResource Overrides & Whitelist", startX + 10, section2Y + 5, 0xFFFFFFFF);
+        graphics.drawString(this.font, "§f§lResource Overrides & Whitelist", startX + 10, section2Y + 4, 0xFFFFFFFF);
 
         // Row 1
-        graphics.drawString(this.font, "Item Whitelist Filter", startX + 12, section2Y + 18, 0xFFFFFFFF);
-        graphics.drawString(this.font, "§7" + (filterCount == 0 ? "No items whitelisted (Shows custom for all)" : filterCount + " item" + (filterCount == 1 ? "" : "s") + " isolated"), startX + 12, section2Y + 28, 0xFFAAAAAA);
+        graphics.drawString(this.font, "Item Whitelist Filter", startX + 12, section2Y + 15, 0xFFFFFFFF);
+        graphics.drawString(this.font, "§7" + (filterCount == 0 ? "No items whitelisted (Shows custom for all)" : filterCount + " item" + (filterCount == 1 ? "" : "s") + " isolated"), startX + 12, section2Y + 24, 0xFFAAAAAA);
 
         // Row 2
-        graphics.drawString(this.font, "Main Override Pack", startX + 12, section2Y + 18 + rowSpacing, 0xFFFFFFFF);
-        graphics.drawString(this.font, "§7Primary custom textures source", startX + 12, section2Y + 28 + rowSpacing, 0xFFAAAAAA);
+        graphics.drawString(this.font, "Main Override Pack", startX + 12, section2Y + 15 + rowSpacing, 0xFFFFFFFF);
+        graphics.drawString(this.font, "§7Primary custom textures source", startX + 12, section2Y + 24 + rowSpacing, 0xFFAAAAAA);
 
         // Row 3
-        graphics.drawString(this.font, "Fallback Base Pack", startX + 12, section2Y + 18 + rowSpacing * 2, 0xFFFFFFFF);
-        graphics.drawString(this.font, "§7Fallback texture provider for peers/mobs", startX + 12, section2Y + 28 + rowSpacing * 2, 0xFFAAAAAA);
+        graphics.drawString(this.font, "Fallback Base Pack", startX + 12, section2Y + 15 + rowSpacing * 2, 0xFFFFFFFF);
+        graphics.drawString(this.font, "§7Fallback texture provider for peers/mobs", startX + 12, section2Y + 24 + rowSpacing * 2, 0xFFAAAAAA);
     }
 
     @Override

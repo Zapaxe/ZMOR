@@ -2,6 +2,7 @@ package com.example.client.mixin;
 
 import com.example.ModConfig;
 import com.example.client.LocalPlayerRenderStateAccessor;
+import com.example.client.RemoteTextureManager;
 import com.example.client.VanillaItemSpriteSource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.Model;
@@ -12,6 +13,7 @@ import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.resources.model.EquipmentClientInfo;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.equipment.EquipmentAsset;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -20,6 +22,8 @@ import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
+
+import java.util.UUID;
 
 @Mixin(EquipmentLayerRenderer.class)
 public class EquipmentRendererMixin {
@@ -48,6 +52,7 @@ public class EquipmentRendererMixin {
         boolean isLocalPlayer = false;
         boolean isOtherPlayer = false;
         Minecraft client = Minecraft.getInstance();
+        UUID peerUuid = null;
 
         if (state instanceof LocalPlayerRenderStateAccessor accessor) {
             if (accessor.zmor$isLocalPlayer()) {
@@ -55,23 +60,22 @@ public class EquipmentRendererMixin {
             } else {
                 isOtherPlayer = true;
             }
+            if (accessor.zmor$getPlayerUuid() != null) {
+                peerUuid = accessor.zmor$getPlayerUuid();
+            }
         }
 
         if (client.player != null && state instanceof AvatarRenderState avatarState) {
             if (avatarState.id == client.player.getId()) {
                 isLocalPlayer = true;
                 isOtherPlayer = false;
-            } else if (!isLocalPlayer) {
+            } else {
                 isOtherPlayer = true;
-            }
-        }
-
-        if (isOtherPlayer && state instanceof LocalPlayerRenderStateAccessor accessor) {
-            java.util.UUID peerUuid = accessor.zmor$getPlayerUuid();
-            if (peerUuid != null) {
-                Identifier remoteTexture = com.example.client.RemoteTextureManager.getRemoteTexture(peerUuid, textureId.getPath());
-                if (remoteTexture != null) {
-                    return RenderTypes.armorCutoutNoCull(remoteTexture);
+                if (peerUuid == null && client.level != null) {
+                    Entity ent = client.level.getEntity(avatarState.id);
+                    if (ent != null) {
+                        peerUuid = ent.getUUID();
+                    }
                 }
             }
         }
@@ -79,6 +83,14 @@ public class EquipmentRendererMixin {
         Identifier itemRegId = stack != null && !stack.isEmpty() ? BuiltInRegistries.ITEM.getKey(stack.getItem()) : null;
         String itemStrId = itemRegId != null ? itemRegId.toString() : null;
         String perItemPack = itemStrId != null ? ModConfig.getItemPack(itemStrId) : "default";
+
+        // If rendering another player and peer texture sync is enabled:
+        if (ModConfig.syncPeerTextures && isOtherPlayer && peerUuid != null) {
+            Identifier remoteTexture = RemoteTextureManager.getRemoteTextureForItem(peerUuid, itemStrId, textureId.getPath(), layerType);
+            if (remoteTexture != null) {
+                return RenderTypes.armorCutoutNoCull(remoteTexture);
+            }
+        }
 
         boolean useCustom = true;
         if (isLocalPlayer) {

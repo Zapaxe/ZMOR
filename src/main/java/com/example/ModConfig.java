@@ -20,6 +20,7 @@ public class ModConfig {
     public static boolean applyToOtherPlayers = false;
     public static boolean applyToMobsAndArmorStands = false;
     public static boolean applyToItemFrames = false;
+    public static boolean syncPeerTextures = true;
     public static List<String> filteredItems = new ArrayList<>();
     public static Map<String, String> itemPackOverrides = new HashMap<>();
     public static String mainOverridePackId = "top";
@@ -39,6 +40,7 @@ public class ModConfig {
                     applyToOtherPlayers = data.applyToOtherPlayers;
                     applyToMobsAndArmorStands = data.applyToMobsAndArmorStands;
                     applyToItemFrames = data.applyToItemFrames;
+                    syncPeerTextures = data.syncPeerTextures;
                     filteredItems = data.filteredItems != null ? data.filteredItems : new ArrayList<>();
                     itemPackOverrides = data.itemPackOverrides != null ? data.itemPackOverrides : new HashMap<>();
                     mainOverridePackId = data.mainOverridePackId != null ? data.mainOverridePackId : "top";
@@ -57,6 +59,7 @@ public class ModConfig {
         data.applyToOtherPlayers = applyToOtherPlayers;
         data.applyToMobsAndArmorStands = applyToMobsAndArmorStands;
         data.applyToItemFrames = applyToItemFrames;
+        data.syncPeerTextures = syncPeerTextures;
         data.filteredItems = filteredItems;
         data.itemPackOverrides = itemPackOverrides;
         data.mainOverridePackId = mainOverridePackId;
@@ -99,6 +102,7 @@ public class ModConfig {
         boolean applyToOtherPlayers = false;
         boolean applyToMobsAndArmorStands = false;
         boolean applyToItemFrames = false;
+        boolean syncPeerTextures = true;
         List<String> filteredItems = new ArrayList<>();
         Map<String, String> itemPackOverrides = new HashMap<>();
         String mainOverridePackId = "top";
