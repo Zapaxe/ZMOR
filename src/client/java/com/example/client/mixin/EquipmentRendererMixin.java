@@ -84,30 +84,48 @@ public class EquipmentRendererMixin {
         String itemStrId = itemRegId != null ? itemRegId.toString() : null;
         String perItemPack = itemStrId != null ? ModConfig.getItemPack(itemStrId) : "default";
 
-        // If rendering another player and peer texture sync is enabled:
-        if (ModConfig.syncPeerTextures && isOtherPlayer && peerUuid != null) {
-            Identifier remoteTexture = RemoteTextureManager.getRemoteTextureForItem(peerUuid, itemStrId, textureId.getPath(), layerType);
-            if (remoteTexture != null) {
-                return RenderTypes.armorCutoutNoCull(remoteTexture);
-            }
-        }
-
-        boolean useCustom = true;
+        // 1. LOCAL PLAYER RENDERING
         if (isLocalPlayer) {
-            useCustom = true;
-        } else {
-            if (ModConfig.isItemWhitelisted(stack)) {
-                if (isOtherPlayer) {
-                    useCustom = ModConfig.applyToOtherPlayers;
+            if (!perItemPack.equals("default")) {
+                if (perItemPack.equals("vanilla")) {
+                    textureId = Identifier.fromNamespaceAndPath("zmor-vanilla", textureId.getPath());
                 } else {
-                    useCustom = ModConfig.applyToMobsAndArmorStands;
+                    String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
+                    textureId = Identifier.fromNamespaceAndPath(packNs, textureId.getPath());
                 }
-            } else {
-                useCustom = true;
             }
+            return RenderTypes.armorCutoutNoCull(textureId);
         }
 
-        if (!useCustom) {
+        // 2. OTHER PLAYERS RENDERING
+        if (isOtherPlayer) {
+            // A. If Peer Sync is enabled, try rendering peer's custom pack texture
+            if (ModConfig.syncPeerTextures && peerUuid != null) {
+                Identifier remoteTexture = RemoteTextureManager.getRemoteTextureForItem(peerUuid, itemStrId, textureId.getPath(), layerType);
+                if (remoteTexture != null) {
+                    return RenderTypes.armorCutoutNoCull(remoteTexture);
+                }
+            }
+
+            // B. If Peer Sync is disabled or peer has no custom texture:
+            // Only apply our own local custom textures to peers if applyToOtherPlayers is explicitly enabled AND item is not whitelisted.
+            boolean useCustom = ModConfig.applyToOtherPlayers && !ModConfig.isItemWhitelisted(stack);
+            if (!useCustom) {
+                textureId = Identifier.fromNamespaceAndPath("zmor-vanilla", textureId.getPath());
+            } else if (!perItemPack.equals("default")) {
+                if (perItemPack.equals("vanilla")) {
+                    textureId = Identifier.fromNamespaceAndPath("zmor-vanilla", textureId.getPath());
+                } else {
+                    String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
+                    textureId = Identifier.fromNamespaceAndPath(packNs, textureId.getPath());
+                }
+            }
+            return RenderTypes.armorCutoutNoCull(textureId);
+        }
+
+        // 3. MOBS & ARMOR STANDS RENDERING
+        boolean useCustomForMobs = ModConfig.applyToMobsAndArmorStands && !ModConfig.isItemWhitelisted(stack);
+        if (!useCustomForMobs) {
             textureId = Identifier.fromNamespaceAndPath("zmor-vanilla", textureId.getPath());
         } else if (!perItemPack.equals("default")) {
             if (perItemPack.equals("vanilla")) {

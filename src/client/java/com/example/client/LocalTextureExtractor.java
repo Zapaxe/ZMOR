@@ -7,6 +7,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.VanillaPackResources;
+import net.minecraft.server.packs.repository.Pack;
 import net.minecraft.server.packs.resources.IoSupplier;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
 import net.minecraft.server.packs.resources.Resource;
@@ -121,6 +122,20 @@ public class LocalTextureExtractor {
         return null;
     }
 
+    public static byte[] tryReadPackResource(PackResources pack, String path) {
+        if (pack == null || path == null) return null;
+        try {
+            Identifier id = Identifier.fromNamespaceAndPath("minecraft", path);
+            IoSupplier<InputStream> supplier = pack.getResource(PackType.CLIENT_RESOURCES, id);
+            if (supplier != null) {
+                try (InputStream is = supplier.get()) {
+                    return is.readAllBytes();
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     public static byte[] getTextureBytesForPack(String packId, String texturePath) {
         Minecraft client = Minecraft.getInstance();
         if (client == null) return null;
@@ -132,35 +147,44 @@ public class LocalTextureExtractor {
         if (packId.equals("vanilla")) {
             VanillaPackResources vanilla = client.getVanillaPackResources();
             if (vanilla != null) {
-                Identifier id = Identifier.fromNamespaceAndPath("minecraft", texturePath);
-                IoSupplier<InputStream> sup = vanilla.getResource(PackType.CLIENT_RESOURCES, id);
-                if (sup == null) {
-                    String alt = toAlternateArmorPath(texturePath);
-                    if (alt != null) sup = vanilla.getResource(PackType.CLIENT_RESOURCES, Identifier.fromNamespaceAndPath("minecraft", alt));
-                }
-                if (sup != null) {
-                    try (InputStream is = sup.get()) {
-                        return is.readAllBytes();
-                    } catch (Exception ignored) {}
+                byte[] bytes = tryReadPackResource(vanilla, texturePath);
+                if (bytes != null) return bytes;
+                String alt = toAlternateArmorPath(texturePath);
+                if (alt != null) {
+                    bytes = tryReadPackResource(vanilla, alt);
+                    if (bytes != null) return bytes;
                 }
             }
             return null;
         }
 
-        // Custom resource pack
+        // Custom resource pack lookup
         PackResources pack = getPackResourcesById(packId);
         if (pack != null) {
-            Identifier id = Identifier.fromNamespaceAndPath("minecraft", texturePath);
-            IoSupplier<InputStream> sup = pack.getResource(PackType.CLIENT_RESOURCES, id);
-            if (sup == null) {
-                String alt = toAlternateArmorPath(texturePath);
-                if (alt != null) sup = pack.getResource(PackType.CLIENT_RESOURCES, Identifier.fromNamespaceAndPath("minecraft", alt));
+            byte[] bytes = tryReadPackResource(pack, texturePath);
+            if (bytes != null) return bytes;
+
+            String alt = toAlternateArmorPath(texturePath);
+            if (alt != null) {
+                bytes = tryReadPackResource(pack, alt);
+                if (bytes != null) return bytes;
             }
-            if (sup != null) {
-                try (InputStream is = sup.get()) {
-                    return is.readAllBytes();
-                } catch (Exception ignored) {}
+
+            String mat = extractMaterialName(texturePath);
+            if (mat != null) {
+                if (texturePath.contains("leggings") || texturePath.contains("layer_2")) {
+                    bytes = tryReadPackResource(pack, "textures/models/armor/" + mat + "_layer_2.png");
+                    if (bytes != null) return bytes;
+                    bytes = tryReadPackResource(pack, "textures/entity/equipment/humanoid_leggings/" + mat + ".png");
+                    if (bytes != null) return bytes;
+                } else {
+                    bytes = tryReadPackResource(pack, "textures/models/armor/" + mat + "_layer_1.png");
+                    if (bytes != null) return bytes;
+                    bytes = tryReadPackResource(pack, "textures/entity/equipment/humanoid/" + mat + ".png");
+                    if (bytes != null) return bytes;
+                }
             }
+            return null;
         }
 
         return getActiveTextureBytes(texturePath);
@@ -182,18 +206,42 @@ public class LocalTextureExtractor {
             return client.getVanillaPackResources();
         }
 
+        // 1. Check open packs from MultiPackResourceManager
         ResourceManager rm = client.getResourceManager();
         if (rm instanceof MultiPackResourceManager multiPackManager) {
             List<PackResources> openPacks = ((MultiPackResourceManagerAccessor) multiPackManager).getPacks();
             if (openPacks != null) {
                 for (PackResources pack : openPacks) {
-                    if (pack.packId().equals(targetId) || VanillaItemSpriteSource.sanitizePackId(pack.packId()).equals(targetId)) {
+                    if (packMatches(pack.packId(), targetId)) {
                         return pack;
                     }
                 }
             }
         }
+
+        // 2. Check PackRepository
+        if (client.getResourcePackRepository() != null) {
+            Pack pack = client.getResourcePackRepository().getPack(targetId);
+            if (pack != null) {
+                return pack.open();
+            }
+            for (Pack p : client.getResourcePackRepository().getAvailablePacks()) {
+                if (packMatches(p.getId(), targetId)) {
+                    return p.open();
+                }
+            }
+        }
+
         return null;
+    }
+
+    private static boolean packMatches(String id1, String id2) {
+        if (id1 == null || id2 == null) return false;
+        if (id1.equals(id2)) return true;
+        if (VanillaItemSpriteSource.sanitizePackId(id1).equals(VanillaItemSpriteSource.sanitizePackId(id2))) return true;
+        String clean1 = id1.startsWith("file/") ? id1.substring(5) : id1;
+        String clean2 = id2.startsWith("file/") ? id2.substring(5) : id2;
+        return clean1.equalsIgnoreCase(clean2);
     }
 
     public static Map<String, String> scanActiveTextures() {
@@ -237,6 +285,25 @@ public class LocalTextureExtractor {
         } catch (NoSuchAlgorithmException e) {
             return null;
         }
+    }
+
+    public static String extractMaterialName(String path) {
+        if (path == null) return null;
+        String clean = path;
+        if (clean.endsWith(".png")) {
+            clean = clean.substring(0, clean.length() - 4);
+        }
+        if (clean.endsWith("_layer_1") || clean.endsWith("_layer_2")) {
+            clean = clean.substring(0, clean.length() - 8);
+        }
+        if (clean.endsWith("_overlay")) {
+            clean = clean.substring(0, clean.length() - 8);
+        }
+        int lastSlash = clean.lastIndexOf('/');
+        if (lastSlash >= 0) {
+            clean = clean.substring(lastSlash + 1);
+        }
+        return clean.isEmpty() ? null : clean;
     }
 
     public static String toAlternateArmorPath(String path) {

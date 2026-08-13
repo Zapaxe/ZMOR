@@ -177,6 +177,14 @@ public class RemoteTextureManager {
         return null;
     }
     
+    public static void removePlayer(UUID playerUuid) {
+        if (playerUuid == null) return;
+        String prefix = playerUuid + ":";
+        REMOTE_TEXTURES.keySet().removeIf(key -> key.startsWith(prefix));
+        REMOTE_HASHES.keySet().removeIf(key -> key.startsWith(prefix));
+        LOGGER.info("[zmor] Cleared all remote textures for player {}", playerUuid);
+    }
+
     public static void clear() {
         REMOTE_TEXTURES.clear();
         REMOTE_HASHES.clear();

@@ -35,8 +35,11 @@ public class ModNetworking {
                 LOGGER.info("[zmor-server] Received texture manifest from {} with {} textures",
                         sender.getName().getString(), payload.textures().size());
                 
-                // Cache manifest on server
-                CACHED_MANIFESTS.put(sender.getUUID(), payload);
+                if (payload.textures().isEmpty()) {
+                    CACHED_MANIFESTS.remove(sender.getUUID());
+                } else {
+                    CACHED_MANIFESTS.put(sender.getUUID(), payload);
+                }
 
                 // Relay manifest to all other connected players
                 for (ServerPlayer peer : context.server().getPlayerList().getPlayers()) {
