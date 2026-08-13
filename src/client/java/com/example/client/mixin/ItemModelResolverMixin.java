@@ -23,6 +23,7 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -90,42 +91,64 @@ public class ItemModelResolverMixin {
         String perItemPack = itemStrId != null ? ModConfig.getItemPack(itemStrId) : "default";
 
         if (target == TargetType.LOCAL_PLAYER || target == TargetType.WORLD_ITEM) {
-            if (!perItemPack.equals("default")) {
-                if (perItemPack.equals("vanilla")) {
-                    remapToNamespace(state, "zmor-vanilla");
-                } else {
-                    String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
-                    remapToNamespace(state, packNs);
-                }
+            String targetNs = resolveEffectiveNamespace(perItemPack);
+            if (targetNs != null) {
+                remapToNamespace(state, targetNs);
             }
             return;
         }
 
-        if (ModConfig.isItemWhitelisted(stack)) {
-            boolean allowCustom = switch (target) {
-                case OTHER_PLAYER -> ModConfig.applyToOtherPlayers;
-                case MOB_OR_ARMOR_STAND -> ModConfig.applyToMobsAndArmorStands;
-                case ITEM_FRAME -> ModConfig.applyToItemFrames;
-                default -> true;
-            };
-            if (!allowCustom) {
-                remapToNamespace(state, "zmor-vanilla");
-            } else if (!perItemPack.equals("default")) {
-                if (perItemPack.equals("vanilla")) {
-                    remapToNamespace(state, "zmor-vanilla");
-                } else {
-                    String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
-                    remapToNamespace(state, packNs);
-                }
-            }
-        } else if (!perItemPack.equals("default")) {
-            if (perItemPack.equals("vanilla")) {
-                remapToNamespace(state, "zmor-vanilla");
-            } else {
-                String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
-                remapToNamespace(state, packNs);
+        if (target == TargetType.OTHER_PLAYER && !ModConfig.applyToOtherPlayers) {
+            remapToNamespace(state, "zmor-vanilla");
+            return;
+        }
+        if (target == TargetType.MOB_OR_ARMOR_STAND && !ModConfig.applyToMobsAndArmorStands) {
+            remapToNamespace(state, "zmor-vanilla");
+            return;
+        }
+        if (target == TargetType.ITEM_FRAME && !ModConfig.applyToItemFrames) {
+            remapToNamespace(state, "zmor-vanilla");
+            return;
+        }
+
+        boolean allowCustom = switch (target) {
+            case OTHER_PLAYER -> ModConfig.applyToOtherPlayers;
+            case MOB_OR_ARMOR_STAND -> ModConfig.applyToMobsAndArmorStands;
+            case ITEM_FRAME -> ModConfig.applyToItemFrames;
+            default -> true;
+        };
+
+        if (allowCustom && !ModConfig.filteredItems.isEmpty()) {
+            allowCustom = ModConfig.isItemWhitelisted(stack);
+        }
+
+        if (!allowCustom) {
+            remapToNamespace(state, "zmor-vanilla");
+        } else {
+            String targetNs = resolveEffectiveNamespace(perItemPack);
+            if (targetNs != null) {
+                remapToNamespace(state, targetNs);
             }
         }
+    }
+
+    @Unique
+    private String resolveEffectiveNamespace(String perItemPack) {
+        if (!perItemPack.equals("default")) {
+            if (perItemPack.equals("vanilla")) {
+                return "zmor-vanilla";
+            } else {
+                return "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
+            }
+        }
+        if (!ModConfig.mainOverridePackId.equals("top")) {
+            if (ModConfig.mainOverridePackId.equals("vanilla")) {
+                return "zmor-vanilla";
+            } else {
+                return "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(ModConfig.mainOverridePackId);
+            }
+        }
+        return null;
     }
 
     private void remapToNamespace(ItemStackRenderState state, String targetNamespace) {

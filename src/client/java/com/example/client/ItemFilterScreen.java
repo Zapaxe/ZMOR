@@ -395,10 +395,11 @@ public class ItemFilterScreen extends Screen {
             if (currentIdx < ModConfig.filteredItems.size()) {
                 String itemStrId = ModConfig.filteredItems.get(currentIdx);
                 int rowY = listStartY + clickedRow * rowHeight;
-                int delBtnX = rightX + 10 + rowW - 16;
+                int delBtnX = rightX + 10 + rowW - 18;
+                int packBtnX = delBtnX - 20;
 
                 // Delete button clicked
-                if (mouseX >= delBtnX && mouseX <= rightX + 10 + rowW) {
+                if (mouseX >= delBtnX && mouseX <= delBtnX + 16 && mouseY >= rowY + 4 && mouseY <= rowY + 20) {
                     ModConfig.filteredItems.remove(currentIdx);
                     ModConfig.itemPackOverrides.remove(itemStrId);
                     ModConfig.save();
@@ -406,7 +407,13 @@ public class ItemFilterScreen extends Screen {
                     return true;
                 }
 
-                // Pack Change button or row clicked -> Open pack picker for this item!
+                // Pack Change button clicked
+                if (mouseX >= packBtnX && mouseX <= packBtnX + 16 && mouseY >= rowY + 4 && mouseY <= rowY + 20) {
+                    this.minecraft.setScreen(new ItemPackPickerScreen(this, itemStrId));
+                    return true;
+                }
+
+                // Row clicked -> Open pack picker for this item!
                 this.minecraft.setScreen(new ItemPackPickerScreen(this, itemStrId));
                 return true;
             }
@@ -529,11 +536,11 @@ public class ItemFilterScreen extends Screen {
             boolean isRowHovered = mouseX >= rightX + 10 && mouseX < rightX + 10 + rowW &&
                                    mouseY >= rowY && mouseY < rowY + 24;
 
-            int delBtnX = rightX + 10 + rowW - 16;
-            boolean isDelHovered = isRowHovered && mouseX >= delBtnX;
+            int delBtnX = rightX + 10 + rowW - 18;
+            boolean isDelHovered = isRowHovered && mouseX >= delBtnX && mouseX <= delBtnX + 16 && mouseY >= rowY + 4 && mouseY <= rowY + 20;
 
-            int packBtnX = rightX + 10 + rowW - 38;
-            boolean isPackHovered = isRowHovered && mouseX >= packBtnX && mouseX < delBtnX;
+            int packBtnX = delBtnX - 20;
+            boolean isPackHovered = isRowHovered && mouseX >= packBtnX && mouseX <= packBtnX + 16 && mouseY >= rowY + 4 && mouseY <= rowY + 20;
 
             graphics.fill(rightX + 10, rowY, rightX + 10 + rowW, rowY + 24, isRowHovered ? 0x30FFFFFF : 0x20000000);
             graphics.renderOutline(rightX + 10, rowY, rowW, 24, isRowHovered ? 0x50FFFFFF : 0x18FFFFFF);
@@ -558,8 +565,8 @@ public class ItemFilterScreen extends Screen {
             }
 
             String renderedName = displayName;
-            if (renderedName.length() > 16) {
-                renderedName = renderedName.substring(0, 14) + "..";
+            if (renderedName.length() > 15) {
+                renderedName = renderedName.substring(0, 13) + "..";
             }
 
             graphics.drawString(this.font, renderedName, rightX + 33, rowY + 3, 0xFFFFFFFF);
@@ -567,18 +574,18 @@ public class ItemFilterScreen extends Screen {
             // Pack Source Indicator
             String packSource = ModConfig.getItemPack(itemStrId);
             String packDisplay = packSource.equals("default") ? "Default" : (packSource.equals("vanilla") ? "Vanilla" : packSource);
-            if (packDisplay.length() > 14) packDisplay = packDisplay.substring(0, 12) + "..";
+            if (packDisplay.length() > 13) packDisplay = packDisplay.substring(0, 11) + "..";
             graphics.drawString(this.font, "§8Pack: §e" + packDisplay, rightX + 33, rowY + 13, 0xFFAAAAAA);
 
-            // Pack Change Button: [ 📦 ]
-            graphics.fill(packBtnX, rowY + 4, packBtnX + 18, rowY + 20, isPackHovered ? 0x5000E676 : 0x20000000);
-            graphics.renderOutline(packBtnX, rowY + 4, 18, 16, isPackHovered ? 0xFF00E676 : 0x30FFFFFF);
-            graphics.drawCenteredString(this.font, "§e📦", packBtnX + 9, rowY + 4, 0xFFFFFFFF);
+            // Pack Change Button: [ 📦 ] (16x16 square, vertically & horizontally centered)
+            graphics.fill(packBtnX, rowY + 4, packBtnX + 16, rowY + 20, isPackHovered ? 0x5000E676 : 0x20000000);
+            graphics.renderOutline(packBtnX, rowY + 4, 16, 16, isPackHovered ? 0xFF00E676 : 0x30FFFFFF);
+            graphics.drawCenteredString(this.font, "§e📦", packBtnX + 8, rowY + 8, 0xFFFFFFFF);
 
-            // Delete Button: [ ✕ ]
-            graphics.fill(delBtnX, rowY + 4, delBtnX + 14, rowY + 20, isDelHovered ? 0x60FF5252 : 0x20000000);
-            graphics.renderOutline(delBtnX, rowY + 4, 14, 16, isDelHovered ? 0xFFFF5252 : 0x30FFFFFF);
-            graphics.drawCenteredString(this.font, "§c✕", delBtnX + 7, rowY + 4, 0xFFFFFFFF);
+            // Delete Button: [ ✕ ] (16x16 square, vertically & horizontally centered)
+            graphics.fill(delBtnX, rowY + 4, delBtnX + 16, rowY + 20, isDelHovered ? 0x60FF5252 : 0x20000000);
+            graphics.renderOutline(delBtnX, rowY + 4, 16, 16, isDelHovered ? 0xFFFF5252 : 0x30FFFFFF);
+            graphics.drawCenteredString(this.font, "§c✕", delBtnX + 8, rowY + 8, 0xFFFFFFFF);
 
             if (isDelHovered) {
                 hoveredRowTooltip = "§cRemove " + displayName + " from whitelist";
