@@ -2,7 +2,7 @@ package com.example.client;
 
 import com.example.ModConfig;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
@@ -137,7 +137,7 @@ public class ItemPackPickerScreen extends Screen {
                 Component.literal("Back"),
                 button -> {
                     ModConfig.save();
-                    this.minecraft.setScreen(this.parent);
+                    this.minecraft.gui.setScreen(this.parent);
                 }
         ).bounds(bottomStartX + prevNextWidth + btnSpacing, bottomY, doneWidth, 20).build());
 
@@ -208,18 +208,18 @@ public class ItemPackPickerScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-        super.render(graphics, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
 
         int cardWidth = 340;
         int startX = (this.width - cardWidth) / 2;
 
         // Render item icon & header
         if (!itemStack.isEmpty()) {
-            graphics.renderFakeItem(itemStack, startX, 8);
+            graphics.fakeItem(itemStack, startX, 8);
         }
-        graphics.drawString(this.font, "§f§lTexture Source for §e" + itemDisplayName, startX + 22, 10, 0xFFFFFFFF);
-        graphics.drawCenteredString(this.font, "§7Choose which resource pack supplies textures for this item", this.width / 2, 24, 0xFFAAAAAA);
+        graphics.text(this.font, "§f§lTexture Source for §e" + itemDisplayName, startX + 22, 10, 0xFFFFFFFF);
+        graphics.centeredText(this.font, "§7Choose which resource pack supplies textures for this item", this.width / 2, 24, 0xFFAAAAAA);
 
         // Pack Cards
         int startY = 68;
@@ -244,13 +244,13 @@ public class ItemPackPickerScreen extends Screen {
             graphics.fill(startX, cardY, startX + cardWidth, cardY + cardHeight, bgColor);
 
             int outlineColor = isSelected ? 0xFF00E676 : (isHovered ? 0x60FFFFFF : 0x20FFFFFF);
-            graphics.renderOutline(startX, cardY, cardWidth, cardHeight, outlineColor);
+            graphics.outline(startX, cardY, cardWidth, cardHeight, outlineColor);
 
             String title = pack.title;
             if (title.length() > 30) {
                 title = title.substring(0, 28) + "...";
             }
-            graphics.drawString(this.font, (isSelected ? "§a§l" : "§f§l") + title, startX + 8, cardY + 6, 0xFFFFFFFF);
+            graphics.text(this.font, (isSelected ? "§a§l" : "§f§l") + title, startX + 8, cardY + 6, 0xFFFFFFFF);
 
             String desc = pack.description.replaceAll("\n", " ");
             if (desc.isEmpty() || desc.equals(title)) {
@@ -259,31 +259,31 @@ public class ItemPackPickerScreen extends Screen {
             if (desc.length() > 46) {
                 desc = desc.substring(0, 44) + "...";
             }
-            graphics.drawString(this.font, "§7" + desc, startX + 8, cardY + 18, 0xFFAAAAAA);
+            graphics.text(this.font, "§7" + desc, startX + 8, cardY + 18, 0xFFAAAAAA);
 
             if (isSelected) {
                 int badgeWidth = 66;
                 int badgeX = startX + cardWidth - badgeWidth - 6;
                 int badgeY = cardY + 8;
                 graphics.fill(badgeX, badgeY, badgeX + badgeWidth, badgeY + 16, 0x4000E676);
-                graphics.renderOutline(badgeX, badgeY, badgeWidth, 16, 0xFF00E676);
-                graphics.drawCenteredString(this.font, "§a✔ ACTIVE", badgeX + badgeWidth / 2, badgeY + 4, 0xFFFFFFFF);
+                graphics.outline(badgeX, badgeY, badgeWidth, 16, 0xFF00E676);
+                graphics.centeredText(this.font, "§a✔ ACTIVE", badgeX + badgeWidth / 2, badgeY + 4, 0xFFFFFFFF);
             }
         }
 
         if (filteredPacks.isEmpty()) {
-            graphics.drawCenteredString(this.font, "§7No matching resource packs found", this.width / 2, startY + 40, 0xFFAAAAAA);
+            graphics.centeredText(this.font, "§7No matching resource packs found", this.width / 2, startY + 40, 0xFFAAAAAA);
         }
 
         // Page Indicator
         int totalPages = Math.max(1, (filteredPacks.size() + PACKS_PER_PAGE - 1) / PACKS_PER_PAGE);
         String pageStr = String.format("§7Page §f%d§7/§f%d §8(%d packs)", page + 1, totalPages, filteredPacks.size());
-        graphics.drawCenteredString(this.font, pageStr, this.width / 2, this.height - 40, 0xFF888888);
+        graphics.centeredText(this.font, pageStr, this.width / 2, this.height - 40, 0xFF888888);
     }
 
     @Override
     public void onClose() {
         ModConfig.save();
-        this.minecraft.setScreen(this.parent);
+        this.minecraft.gui.setScreen(this.parent);
     }
 }
