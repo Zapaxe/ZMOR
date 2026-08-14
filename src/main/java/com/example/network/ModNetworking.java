@@ -18,15 +18,15 @@ public class ModNetworking {
     private static final Map<UUID, TextureManifestPayload> CACHED_MANIFESTS = new ConcurrentHashMap<>();
 
     public static void registerCommon() {
-        // Register C2S and S2C payloads
-        PayloadTypeRegistry.playC2S().register(TextureManifestPayload.TYPE, TextureManifestPayload.STREAM_CODEC);
-        PayloadTypeRegistry.playS2C().register(TextureManifestPayload.TYPE, TextureManifestPayload.STREAM_CODEC);
+        // Register C2S and S2C payloads (Fabric modernized method names in 26.1+)
+        PayloadTypeRegistry.serverboundPlay().register(TextureManifestPayload.TYPE, TextureManifestPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(TextureManifestPayload.TYPE, TextureManifestPayload.STREAM_CODEC);
 
-        PayloadTypeRegistry.playC2S().register(TextureRequestPayload.TYPE, TextureRequestPayload.STREAM_CODEC);
-        PayloadTypeRegistry.playS2C().register(TextureRequestPayload.TYPE, TextureRequestPayload.STREAM_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(TextureRequestPayload.TYPE, TextureRequestPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(TextureRequestPayload.TYPE, TextureRequestPayload.STREAM_CODEC);
 
-        PayloadTypeRegistry.playC2S().register(TextureResponsePayload.TYPE, TextureResponsePayload.STREAM_CODEC);
-        PayloadTypeRegistry.playS2C().register(TextureResponsePayload.TYPE, TextureResponsePayload.STREAM_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(TextureResponsePayload.TYPE, TextureResponsePayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(TextureResponsePayload.TYPE, TextureResponsePayload.STREAM_CODEC);
 
         // Server-side Relay Handlers
         ServerPlayNetworking.registerGlobalReceiver(TextureManifestPayload.TYPE, (payload, context) -> {
@@ -35,8 +35,11 @@ public class ModNetworking {
                 LOGGER.info("[zmor-server] Received texture manifest from {} with {} textures",
                         sender.getName().getString(), payload.textures().size());
                 
-                // Cache manifest on server
-                CACHED_MANIFESTS.put(sender.getUUID(), payload);
+                if (payload.textures().isEmpty()) {
+                    CACHED_MANIFESTS.remove(sender.getUUID());
+                } else {
+                    CACHED_MANIFESTS.put(sender.getUUID(), payload);
+                }
 
                 // Relay manifest to all other connected players
                 for (ServerPlayer peer : context.server().getPlayerList().getPlayers()) {

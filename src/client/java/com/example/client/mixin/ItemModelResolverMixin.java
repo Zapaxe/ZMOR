@@ -5,7 +5,9 @@ import com.example.client.ItemRenderContext;
 import com.example.client.ItemRenderContext.TargetType;
 import com.example.client.VanillaItemSpriteSource;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.Sheets;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.client.renderer.item.ItemModelResolver;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.texture.TextureAtlas;
@@ -23,6 +25,7 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -90,42 +93,64 @@ public class ItemModelResolverMixin {
         String perItemPack = itemStrId != null ? ModConfig.getItemPack(itemStrId) : "default";
 
         if (target == TargetType.LOCAL_PLAYER || target == TargetType.WORLD_ITEM) {
-            if (!perItemPack.equals("default")) {
-                if (perItemPack.equals("vanilla")) {
-                    remapToNamespace(state, "zmor-vanilla");
-                } else {
-                    String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
-                    remapToNamespace(state, packNs);
-                }
+            String targetNs = resolveEffectiveNamespace(perItemPack);
+            if (targetNs != null) {
+                remapToNamespace(state, targetNs);
             }
             return;
         }
 
-        if (ModConfig.isItemWhitelisted(stack)) {
-            boolean allowCustom = switch (target) {
-                case OTHER_PLAYER -> ModConfig.applyToOtherPlayers;
-                case MOB_OR_ARMOR_STAND -> ModConfig.applyToMobsAndArmorStands;
-                case ITEM_FRAME -> ModConfig.applyToItemFrames;
-                default -> true;
-            };
-            if (!allowCustom) {
-                remapToNamespace(state, "zmor-vanilla");
-            } else if (!perItemPack.equals("default")) {
-                if (perItemPack.equals("vanilla")) {
-                    remapToNamespace(state, "zmor-vanilla");
-                } else {
-                    String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
-                    remapToNamespace(state, packNs);
-                }
-            }
-        } else if (!perItemPack.equals("default")) {
-            if (perItemPack.equals("vanilla")) {
-                remapToNamespace(state, "zmor-vanilla");
-            } else {
-                String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
-                remapToNamespace(state, packNs);
+        if (target == TargetType.OTHER_PLAYER && !ModConfig.applyToOtherPlayers) {
+            remapToNamespace(state, "zmor-vanilla");
+            return;
+        }
+        if (target == TargetType.MOB_OR_ARMOR_STAND && !ModConfig.applyToMobsAndArmorStands) {
+            remapToNamespace(state, "zmor-vanilla");
+            return;
+        }
+        if (target == TargetType.ITEM_FRAME && !ModConfig.applyToItemFrames) {
+            remapToNamespace(state, "zmor-vanilla");
+            return;
+        }
+
+        boolean allowCustom = switch (target) {
+            case OTHER_PLAYER -> ModConfig.applyToOtherPlayers;
+            case MOB_OR_ARMOR_STAND -> ModConfig.applyToMobsAndArmorStands;
+            case ITEM_FRAME -> ModConfig.applyToItemFrames;
+            default -> true;
+        };
+
+        if (allowCustom && !ModConfig.filteredItems.isEmpty()) {
+            allowCustom = ModConfig.isItemWhitelisted(stack);
+        }
+
+        if (!allowCustom) {
+            remapToNamespace(state, "zmor-vanilla");
+        } else {
+            String targetNs = resolveEffectiveNamespace(perItemPack);
+            if (targetNs != null) {
+                remapToNamespace(state, targetNs);
             }
         }
+    }
+
+    @Unique
+    private String resolveEffectiveNamespace(String perItemPack) {
+        if (!perItemPack.equals("default")) {
+            if (perItemPack.equals("vanilla")) {
+                return "zmor-vanilla";
+            } else {
+                return "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
+            }
+        }
+        if (!ModConfig.mainOverridePackId.equals("top")) {
+            if (ModConfig.mainOverridePackId.equals("vanilla")) {
+                return "zmor-vanilla";
+            } else {
+                return "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(ModConfig.mainOverridePackId);
+            }
+        }
+        return null;
     }
 
     private void remapToNamespace(ItemStackRenderState state, String targetNamespace) {
@@ -147,10 +172,9 @@ public class ItemModelResolverMixin {
         List<BakedQuad> quads = layerAccessor.getQuads();
         if (quads == null || quads.isEmpty()) return;
 
-        boolean anyRemapped = false;
         for (int i = 0; i < quads.size(); i++) {
             BakedQuad quad = quads.get(i);
-            TextureAtlasSprite originalSprite = quad.sprite();
+            TextureAtlasSprite originalSprite = quad.materialInfo().sprite();
             if (originalSprite == null) continue;
 
             Identifier spriteId = originalSprite.contents().name();
@@ -162,21 +186,6 @@ public class ItemModelResolverMixin {
             if (customSprite == null || customSprite == atlas.missingSprite()) continue;
 
             quads.set(i, remapQuad(quad, originalSprite, customSprite));
-            anyRemapped = true;
-        }
-
-        if (anyRemapped) {
-            TextureAtlasSprite icon = layerAccessor.getParticleIcon();
-            if (icon != null) {
-                Identifier iconId = icon.contents().name();
-                if (iconId.getPath().startsWith("item/")) {
-                    Identifier customIconId = Identifier.fromNamespaceAndPath(targetNamespace, iconId.getPath());
-                    TextureAtlasSprite customIcon = atlas.getSprite(customIconId);
-                    if (customIcon != null && customIcon != atlas.missingSprite()) {
-                        layerAccessor.setParticleIcon(customIcon);
-                    }
-                }
-            }
         }
     }
 
@@ -202,24 +211,48 @@ public class ItemModelResolverMixin {
         float u1v = target.getU1();
         float v1v = target.getV1();
 
-        float uScale = (u1v - u0v) / (u1 - u0);
-        float vScale = (v1v - v0v) / (v1 - v0);
+        float origDu = u1 - u0;
+        float origDv = v1 - v0;
+        float targetDu = u1v - u0v;
+        float targetDv = v1v - v0v;
+
+        if (Math.abs(origDu) < 1e-6f || Math.abs(origDv) < 1e-6f) {
+            return quad;
+        }
 
         long[] newUVs = new long[4];
         for (int i = 0; i < 4; i++) {
             long packedUV = quad.packedUV(i);
             float oldU = unpackU(packedUV);
             float oldV = unpackV(packedUV);
-            float newU = u0v + (oldU - u0) * uScale;
-            float newV = v0v + (oldV - v0) * vScale;
+
+            // Normalized position [0.0 .. 1.0] within the sprite bounds
+            float normU = (oldU - u0) / origDu;
+            float normV = (oldV - v0) / origDv;
+
+            // Clamping tightly prevents subpixel bleeding into neighboring atlas textures (e.g. grass/foliage)
+            normU = Math.max(0.0f, Math.min(1.0f, normU));
+            normV = Math.max(0.0f, Math.min(1.0f, normV));
+
+            float newU = u0v + normU * targetDu;
+            float newV = v0v + normV * targetDv;
             newUVs[i] = packUV(newU, newV);
         }
 
+        BakedQuad.MaterialInfo oldInfo = quad.materialInfo();
+        BakedQuad.MaterialInfo newInfo = new BakedQuad.MaterialInfo(
+                target,
+                ChunkSectionLayer.CUTOUT,
+                Sheets.cutoutItemSheet(),
+                oldInfo.tintIndex(),
+                oldInfo.shade(),
+                oldInfo.lightEmission()
+        );
+
         return new BakedQuad(
-            quad.position0(), quad.position1(), quad.position2(), quad.position3(),
-            newUVs[0], newUVs[1], newUVs[2], newUVs[3],
-            quad.tintIndex(), quad.direction(), target,
-            quad.shade(), quad.lightEmission()
+                quad.position0(), quad.position1(), quad.position2(), quad.position3(),
+                newUVs[0], newUVs[1], newUVs[2], newUVs[3],
+                quad.direction(), newInfo
         );
     }
 }

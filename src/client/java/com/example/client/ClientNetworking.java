@@ -10,6 +10,7 @@ import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
 
@@ -27,7 +28,14 @@ public class ClientNetworking {
                     return;
                 }
 
-                // If peer texture sync is disabled, do not download/request any textures from peers!
+                // If peer sent an empty manifest (meaning they disabled sharing with others):
+                if (payload.textures().isEmpty()) {
+                    LOGGER.info("[zmor-client] Peer {} disabled sharing (empty manifest received)", peerUuid);
+                    RemoteTextureManager.removePlayer(peerUuid);
+                    return;
+                }
+
+                // If our client has peer texture sync disabled, ignore manifest:
                 if (!ModConfig.syncPeerTextures) {
                     LOGGER.debug("[zmor-client] Peer texture sync is disabled; skipping manifest from {}", peerUuid);
                     return;
@@ -62,6 +70,12 @@ public class ClientNetworking {
 
             client.execute(() -> {
                 if (client.player == null || !payload.targetPlayerUuid().equals(client.player.getUUID())) {
+                    return;
+                }
+
+                // If sharing to other players is disabled, REJECT the request!
+                if (!ModConfig.applyToOtherPlayers) {
+                    LOGGER.info("[zmor-client] Refusing texture request from {} because 'Other Players' sharing is disabled", payload.requesterUuid());
                     return;
                 }
 
@@ -129,6 +143,19 @@ public class ClientNetworking {
     public static void broadcastLocalManifest() {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.player == null) return;
+
+        // If sharing is disabled, broadcast empty manifest so peers clear any existing custom textures
+        if (!ModConfig.applyToOtherPlayers) {
+            try {
+                if (ClientPlayNetworking.canSend(TextureManifestPayload.TYPE)) {
+                    ClientPlayNetworking.send(new TextureManifestPayload(client.player.getUUID(), Collections.emptyMap()));
+                    LOGGER.info("[zmor-client] Sharing disabled: broadcasted empty manifest to clear peer caches");
+                }
+            } catch (Exception e) {
+                LOGGER.error("[zmor-client] Failed to send empty manifest", e);
+            }
+            return;
+        }
 
         Map<String, String> textures = LocalTextureExtractor.scanActiveTextures();
         if (!textures.isEmpty()) {

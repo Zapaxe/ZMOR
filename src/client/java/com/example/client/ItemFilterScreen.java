@@ -1,7 +1,7 @@
 package com.example.client;
 
 import com.example.ModConfig;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
@@ -298,20 +298,20 @@ public class ItemFilterScreen extends Screen {
         updatePresetButtonLabels();
     }
 
-    private void drawSlot(GuiGraphics graphics, int x, int y, boolean isSelected, boolean isHovered) {
+    private void drawSlot(GuiGraphicsExtractor graphics, int x, int y, boolean isSelected, boolean isHovered) {
         graphics.fill(x, y, x + 18, y + 18, 0xFF1C1C1E);
         graphics.fill(x + 1, y + 1, x + 18, y + 18, 0xFF38383C);
         graphics.fill(x + 1, y + 1, x + 17, y + 17, 0xFF141416);
 
         if (isSelected) {
             graphics.fill(x + 1, y + 1, x + 17, y + 17, 0x4500E676);
-            graphics.renderOutline(x, y, 18, 18, 0xFF00E676);
+            graphics.outline(x, y, 18, 18, 0xFF00E676);
         }
 
         if (isHovered) {
             graphics.fill(x + 1, y + 1, x + 17, y + 17, 0x45FFFFFF);
             if (!isSelected) {
-                graphics.renderOutline(x, y, 18, 18, 0xFFFFFFFF);
+                graphics.outline(x, y, 18, 18, 0xFFFFFFFF);
             }
         }
     }
@@ -395,10 +395,11 @@ public class ItemFilterScreen extends Screen {
             if (currentIdx < ModConfig.filteredItems.size()) {
                 String itemStrId = ModConfig.filteredItems.get(currentIdx);
                 int rowY = listStartY + clickedRow * rowHeight;
-                int delBtnX = rightX + 10 + rowW - 16;
+                int delBtnX = rightX + 10 + rowW - 18;
+                int packBtnX = delBtnX - 20;
 
                 // Delete button clicked
-                if (mouseX >= delBtnX && mouseX <= rightX + 10 + rowW) {
+                if (mouseX >= delBtnX && mouseX <= delBtnX + 16 && mouseY >= rowY + 4 && mouseY <= rowY + 20) {
                     ModConfig.filteredItems.remove(currentIdx);
                     ModConfig.itemPackOverrides.remove(itemStrId);
                     ModConfig.save();
@@ -406,7 +407,13 @@ public class ItemFilterScreen extends Screen {
                     return true;
                 }
 
-                // Pack Change button or row clicked -> Open pack picker for this item!
+                // Pack Change button clicked
+                if (mouseX >= packBtnX && mouseX <= packBtnX + 16 && mouseY >= rowY + 4 && mouseY <= rowY + 20) {
+                    this.minecraft.setScreen(new ItemPackPickerScreen(this, itemStrId));
+                    return true;
+                }
+
+                // Row clicked -> Open pack picker for this item!
                 this.minecraft.setScreen(new ItemPackPickerScreen(this, itemStrId));
                 return true;
             }
@@ -416,8 +423,8 @@ public class ItemFilterScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-        super.render(graphics, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
 
         int leftW = 276;
         int rightW = 224;
@@ -430,12 +437,12 @@ public class ItemFilterScreen extends Screen {
         int topY = 18;
 
         // Main Screen Title
-        graphics.drawCenteredString(this.font, "§f§lItem Whitelist Manager", this.width / 2, 6, 0xFFFFFFFF);
+        graphics.centeredText(this.font, "§f§lItem Whitelist Manager", this.width / 2, 6, 0xFFFFFFFF);
 
         // Panel 1: Left Container (Item Catalog)
         graphics.fill(leftX, topY, leftX + leftW, topY + panelH, 0x40000000);
-        graphics.renderOutline(leftX, topY, leftW, panelH, 0x20FFFFFF);
-        graphics.drawString(this.font, "§f§lItem Catalog", leftX + 10, topY + 6, 0xFFFFFFFF);
+        graphics.outline(leftX, topY, leftW, panelH, 0x20FFFFFF);
+        graphics.text(this.font, "§f§lItem Catalog", leftX + 10, topY + 6, 0xFFFFFFFF);
 
         // Category Tab Strip (Width 255px total across 5 tabs = 51px each)
         int tabStripY = topY + 40;
@@ -455,7 +462,7 @@ public class ItemFilterScreen extends Screen {
             }
 
             String tabLabel = (isSel ? "§a§l" : (isTabHover ? "§f" : "§7")) + cat.getLabel();
-            graphics.drawCenteredString(this.font, tabLabel, tabX + (tabW - 2) / 2, tabStripY + 4, 0xFFFFFFFF);
+            graphics.centeredText(this.font, tabLabel, tabX + (tabW - 2) / 2, tabStripY + 4, 0xFFFFFFFF);
         }
 
         // Left Item Grid (12 cols x 6 rows = 72 items!)
@@ -488,7 +495,7 @@ public class ItemFilterScreen extends Screen {
 
                 if (currentIdx < searchResults.size()) {
                     Item item = searchResults.get(currentIdx);
-                    graphics.renderFakeItem(new ItemStack(item), slotX + 1, slotY + 1);
+                    graphics.fakeItem(new ItemStack(item), slotX + 1, slotY + 1);
 
                     if (isHovered) {
                         hoveredGridItem = item;
@@ -500,16 +507,16 @@ public class ItemFilterScreen extends Screen {
         // Left Pagination Indicator
         int totalSearchPages = Math.max(1, (searchResults.size() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE);
         String searchPageStr = String.format("§7Page §f%d§7/§f%d §8(%d items)", searchPage + 1, totalSearchPages, searchResults.size());
-        graphics.drawCenteredString(this.font, searchPageStr, leftX + leftW / 2, topY + 215, 0xFF888888);
+        graphics.centeredText(this.font, searchPageStr, leftX + leftW / 2, topY + 215, 0xFF888888);
 
         // Panel 2: Right Container (Active Whitelist)
         graphics.fill(rightX, topY, rightX + rightW, topY + panelH, 0x40000000);
-        graphics.renderOutline(rightX, topY, rightW, panelH, 0x20FFFFFF);
+        graphics.outline(rightX, topY, rightW, panelH, 0x20FFFFFF);
 
         int filterCount = ModConfig.filteredItems.size();
-        graphics.drawString(this.font, "§f§lActive Whitelist", rightX + 10, topY + 6, 0xFFFFFFFF);
+        graphics.text(this.font, "§f§lActive Whitelist", rightX + 10, topY + 6, 0xFFFFFFFF);
         String countBadge = "§e" + filterCount + " " + (filterCount == 1 ? "item" : "items");
-        graphics.drawString(this.font, countBadge, rightX + rightW - this.font.width(countBadge) - 10, topY + 6, 0xFFFFFFFF);
+        graphics.text(this.font, countBadge, rightX + rightW - this.font.width(countBadge) - 10, topY + 6, 0xFFFFFFFF);
 
         // Tracked Items List Rows (6 items per page)
         int listStartY = topY + 24;
@@ -529,14 +536,14 @@ public class ItemFilterScreen extends Screen {
             boolean isRowHovered = mouseX >= rightX + 10 && mouseX < rightX + 10 + rowW &&
                                    mouseY >= rowY && mouseY < rowY + 24;
 
-            int delBtnX = rightX + 10 + rowW - 16;
-            boolean isDelHovered = isRowHovered && mouseX >= delBtnX;
+            int delBtnX = rightX + 10 + rowW - 18;
+            boolean isDelHovered = isRowHovered && mouseX >= delBtnX && mouseX <= delBtnX + 16 && mouseY >= rowY + 4 && mouseY <= rowY + 20;
 
-            int packBtnX = rightX + 10 + rowW - 38;
-            boolean isPackHovered = isRowHovered && mouseX >= packBtnX && mouseX < delBtnX;
+            int packBtnX = delBtnX - 20;
+            boolean isPackHovered = isRowHovered && mouseX >= packBtnX && mouseX <= packBtnX + 16 && mouseY >= rowY + 4 && mouseY <= rowY + 20;
 
             graphics.fill(rightX + 10, rowY, rightX + 10 + rowW, rowY + 24, isRowHovered ? 0x30FFFFFF : 0x20000000);
-            graphics.renderOutline(rightX + 10, rowY, rowW, 24, isRowHovered ? 0x50FFFFFF : 0x18FFFFFF);
+            graphics.outline(rightX + 10, rowY, rowW, 24, isRowHovered ? 0x50FFFFFF : 0x18FFFFFF);
 
             Identifier id = Identifier.tryParse(itemStrId);
             ItemStack stack = ItemStack.EMPTY;
@@ -554,31 +561,31 @@ public class ItemFilterScreen extends Screen {
             }
 
             if (!stack.isEmpty()) {
-                graphics.renderFakeItem(stack, rightX + 13, rowY + 4);
+                graphics.fakeItem(stack, rightX + 13, rowY + 4);
             }
 
             String renderedName = displayName;
-            if (renderedName.length() > 16) {
-                renderedName = renderedName.substring(0, 14) + "..";
+            if (renderedName.length() > 15) {
+                renderedName = renderedName.substring(0, 13) + "..";
             }
 
-            graphics.drawString(this.font, renderedName, rightX + 33, rowY + 3, 0xFFFFFFFF);
+            graphics.text(this.font, renderedName, rightX + 33, rowY + 3, 0xFFFFFFFF);
 
             // Pack Source Indicator
             String packSource = ModConfig.getItemPack(itemStrId);
             String packDisplay = packSource.equals("default") ? "Default" : (packSource.equals("vanilla") ? "Vanilla" : packSource);
-            if (packDisplay.length() > 14) packDisplay = packDisplay.substring(0, 12) + "..";
-            graphics.drawString(this.font, "§8Pack: §e" + packDisplay, rightX + 33, rowY + 13, 0xFFAAAAAA);
+            if (packDisplay.length() > 13) packDisplay = packDisplay.substring(0, 11) + "..";
+            graphics.text(this.font, "§8Pack: §e" + packDisplay, rightX + 33, rowY + 13, 0xFFAAAAAA);
 
-            // Pack Change Button: [ 📦 ]
-            graphics.fill(packBtnX, rowY + 4, packBtnX + 18, rowY + 20, isPackHovered ? 0x5000E676 : 0x20000000);
-            graphics.renderOutline(packBtnX, rowY + 4, 18, 16, isPackHovered ? 0xFF00E676 : 0x30FFFFFF);
-            graphics.drawCenteredString(this.font, "§e📦", packBtnX + 9, rowY + 4, 0xFFFFFFFF);
+            // Pack Change Button: [ 📦 ] (16x16 square, vertically & horizontally centered)
+            graphics.fill(packBtnX, rowY + 4, packBtnX + 16, rowY + 20, isPackHovered ? 0x5000E676 : 0x20000000);
+            graphics.outline(packBtnX, rowY + 4, 16, 16, isPackHovered ? 0xFF00E676 : 0x30FFFFFF);
+            graphics.centeredText(this.font, "§e📦", packBtnX + 8, rowY + 8, 0xFFFFFFFF);
 
-            // Delete Button: [ ✕ ]
-            graphics.fill(delBtnX, rowY + 4, delBtnX + 14, rowY + 20, isDelHovered ? 0x60FF5252 : 0x20000000);
-            graphics.renderOutline(delBtnX, rowY + 4, 14, 16, isDelHovered ? 0xFFFF5252 : 0x30FFFFFF);
-            graphics.drawCenteredString(this.font, "§c✕", delBtnX + 7, rowY + 4, 0xFFFFFFFF);
+            // Delete Button: [ ✕ ] (16x16 square, vertically & horizontally centered)
+            graphics.fill(delBtnX, rowY + 4, delBtnX + 16, rowY + 20, isDelHovered ? 0x60FF5252 : 0x20000000);
+            graphics.outline(delBtnX, rowY + 4, 16, 16, isDelHovered ? 0xFFFF5252 : 0x30FFFFFF);
+            graphics.centeredText(this.font, "§c✕", delBtnX + 8, rowY + 8, 0xFFFFFFFF);
 
             if (isDelHovered) {
                 hoveredRowTooltip = "§cRemove " + displayName + " from whitelist";
@@ -591,15 +598,15 @@ public class ItemFilterScreen extends Screen {
 
         // Empty Whitelist State
         if (ModConfig.filteredItems.isEmpty()) {
-            graphics.drawCenteredString(this.font, "§7No items whitelisted", rightX + rightW / 2, topY + 76, 0xFFAAAAAA);
-            graphics.drawCenteredString(this.font, "§8Click catalog items to add", rightX + rightW / 2, topY + 92, 0xFF888888);
-            graphics.drawCenteredString(this.font, "§8or use preset buttons", rightX + rightW / 2, topY + 104, 0xFF888888);
+            graphics.centeredText(this.font, "§7No items whitelisted", rightX + rightW / 2, topY + 76, 0xFFAAAAAA);
+            graphics.centeredText(this.font, "§8Click catalog items to add", rightX + rightW / 2, topY + 92, 0xFF888888);
+            graphics.centeredText(this.font, "§8or use preset buttons", rightX + rightW / 2, topY + 104, 0xFF888888);
         }
 
         // Right Pagination Indicator
         int totalFilterPages = Math.max(1, (addedList.size() + TRACKED_ITEMS_PER_PAGE - 1) / TRACKED_ITEMS_PER_PAGE);
         String filterPageStr = String.format("§7Page §f%d§7/§f%d", filterPage + 1, totalFilterPages);
-        graphics.drawCenteredString(this.font, filterPageStr, rightX + rightW / 2, topY + 215, 0xFF888888);
+        graphics.centeredText(this.font, filterPageStr, rightX + rightW / 2, topY + 215, 0xFF888888);
 
         // Tooltips (Rendered on top)
         if (hoveredGridItem != null) {

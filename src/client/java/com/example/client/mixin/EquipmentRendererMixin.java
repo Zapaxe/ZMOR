@@ -20,6 +20,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
@@ -84,40 +85,69 @@ public class EquipmentRendererMixin {
         String itemStrId = itemRegId != null ? itemRegId.toString() : null;
         String perItemPack = itemStrId != null ? ModConfig.getItemPack(itemStrId) : "default";
 
-        // If rendering another player and peer texture sync is enabled:
-        if (ModConfig.syncPeerTextures && isOtherPlayer && peerUuid != null) {
-            Identifier remoteTexture = RemoteTextureManager.getRemoteTextureForItem(peerUuid, itemStrId, textureId.getPath(), layerType);
-            if (remoteTexture != null) {
-                return RenderTypes.armorCutoutNoCull(remoteTexture);
-            }
-        }
-
-        boolean useCustom = true;
+        // 1. LOCAL PLAYER RENDERING
         if (isLocalPlayer) {
-            useCustom = true;
-        } else {
-            if (ModConfig.isItemWhitelisted(stack)) {
-                if (isOtherPlayer) {
-                    useCustom = ModConfig.applyToOtherPlayers;
-                } else {
-                    useCustom = ModConfig.applyToMobsAndArmorStands;
-                }
-            } else {
-                useCustom = true;
-            }
+            textureId = zmor$resolveEffectiveTexture(textureId, perItemPack);
+            return RenderTypes.armorCutoutNoCull(textureId);
         }
 
-        if (!useCustom) {
-            textureId = Identifier.fromNamespaceAndPath("zmor-vanilla", textureId.getPath());
-        } else if (!perItemPack.equals("default")) {
-            if (perItemPack.equals("vanilla")) {
+        // 2. OTHER PLAYERS RENDERING
+        if (isOtherPlayer) {
+            // A. If Peer Sync is enabled, try rendering peer's custom pack texture
+            if (ModConfig.syncPeerTextures && peerUuid != null) {
+                Identifier remoteTexture = RemoteTextureManager.getRemoteTextureForItem(peerUuid, itemStrId, textureId.getPath(), layerType);
+                if (remoteTexture != null) {
+                    return RenderTypes.armorCutoutNoCull(remoteTexture);
+                }
+            }
+
+            // B. If Peer Sync is disabled or peer has no custom texture:
+            boolean useCustom = ModConfig.applyToOtherPlayers;
+            if (useCustom && !ModConfig.filteredItems.isEmpty()) {
+                useCustom = ModConfig.isItemWhitelisted(stack);
+            }
+
+            if (!useCustom) {
                 textureId = Identifier.fromNamespaceAndPath("zmor-vanilla", textureId.getPath());
             } else {
-                String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
-                textureId = Identifier.fromNamespaceAndPath(packNs, textureId.getPath());
+                textureId = zmor$resolveEffectiveTexture(textureId, perItemPack);
             }
+            return RenderTypes.armorCutoutNoCull(textureId);
+        }
+
+        // 3. MOBS & ARMOR STANDS RENDERING
+        boolean useCustomForMobs = ModConfig.applyToMobsAndArmorStands;
+        if (useCustomForMobs && !ModConfig.filteredItems.isEmpty()) {
+            useCustomForMobs = ModConfig.isItemWhitelisted(stack);
+        }
+
+        if (!useCustomForMobs) {
+            textureId = Identifier.fromNamespaceAndPath("zmor-vanilla", textureId.getPath());
+        } else {
+            textureId = zmor$resolveEffectiveTexture(textureId, perItemPack);
         }
 
         return RenderTypes.armorCutoutNoCull(textureId);
+    }
+
+    @Unique
+    private Identifier zmor$resolveEffectiveTexture(Identifier baseTextureId, String perItemPack) {
+        if (!perItemPack.equals("default")) {
+            if (perItemPack.equals("vanilla")) {
+                return Identifier.fromNamespaceAndPath("zmor-vanilla", baseTextureId.getPath());
+            } else {
+                String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(perItemPack);
+                return Identifier.fromNamespaceAndPath(packNs, baseTextureId.getPath());
+            }
+        }
+        if (!ModConfig.mainOverridePackId.equals("top")) {
+            if (ModConfig.mainOverridePackId.equals("vanilla")) {
+                return Identifier.fromNamespaceAndPath("zmor-vanilla", baseTextureId.getPath());
+            } else {
+                String packNs = "zmor-pk-" + VanillaItemSpriteSource.sanitizePackId(ModConfig.mainOverridePackId);
+                return Identifier.fromNamespaceAndPath(packNs, baseTextureId.getPath());
+            }
+        }
+        return baseTextureId;
     }
 }
