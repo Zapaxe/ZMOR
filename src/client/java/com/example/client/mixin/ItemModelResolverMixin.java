@@ -225,16 +225,31 @@ public class ItemModelResolverMixin {
         float u1v = target.getU1();
         float v1v = target.getV1();
 
-        float uScale = (u1v - u0v) / (u1 - u0);
-        float vScale = (v1v - v0v) / (v1 - v0);
+        float origDu = u1 - u0;
+        float origDv = v1 - v0;
+        float targetDu = u1v - u0v;
+        float targetDv = v1v - v0v;
+
+        if (Math.abs(origDu) < 1e-6f || Math.abs(origDv) < 1e-6f) {
+            return quad;
+        }
 
         long[] newUVs = new long[4];
         for (int i = 0; i < 4; i++) {
             long packedUV = quad.packedUV(i);
             float oldU = unpackU(packedUV);
             float oldV = unpackV(packedUV);
-            float newU = u0v + (oldU - u0) * uScale;
-            float newV = v0v + (oldV - v0) * vScale;
+
+            // Normalized position [0.0 .. 1.0] within the sprite bounds
+            float normU = (oldU - u0) / origDu;
+            float normV = (oldV - v0) / origDv;
+
+            // Clamping tightly prevents subpixel bleeding into neighboring atlas textures (e.g. grass/foliage)
+            normU = Math.max(0.0f, Math.min(1.0f, normU));
+            normV = Math.max(0.0f, Math.min(1.0f, normV));
+
+            float newU = u0v + normU * targetDu;
+            float newV = v0v + normV * targetDv;
             newUVs[i] = packUV(newU, newV);
         }
 
