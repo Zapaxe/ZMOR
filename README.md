@@ -42,4 +42,4 @@ Access the configuration interface in-game via **Mod Menu** -> **ZMOR**.
 
 ## License
 
-Distributed under the [**LGPLv3 License**](https://github.com/Zapaxe/Z/blob/main/LICENSE). Created by [**Zapaxe**](https://github.com/Zapaxe).
+Distributed under the [**LGPLv3 License**](https://github.com/Zapaxe/ZMOR/blob/main/LICENSE). Created by [**Zapaxe**](https://github.com/Zapaxe).
